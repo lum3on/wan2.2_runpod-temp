@@ -19,6 +19,12 @@ echo "📦 Installing ComfyUI ${COMFYUI_VERSION:-v0.3.55}..."
 cd /
 /usr/bin/yes | comfy --workspace /comfyui install --version "${COMFYUI_VERSION:-v0.3.55}" --nvidia
 
+# Copy extra_model_paths.yaml for network volume support
+if [ -f "/etc/extra_model_paths.yaml" ]; then
+    echo "📋 Copying extra_model_paths.yaml for network volume support..."
+    cp /etc/extra_model_paths.yaml /comfyui/extra_model_paths.yaml
+fi
+
 echo "🔥 Installing PyTorch with CUDA 12.8 support..."
 pip install --no-cache-dir --upgrade \
     torch \

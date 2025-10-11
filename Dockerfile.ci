@@ -47,21 +47,17 @@ ENV PATH="/opt/venv/bin:${PATH}"
 RUN uv pip install --no-cache comfy-cli pip setuptools wheel \
     && rm -rf /root/.cache/uv && rm -rf /tmp/*
 
-# Create ComfyUI workspace directory
-RUN mkdir -p /comfyui
-
-# Change to ComfyUI directory
-WORKDIR /comfyui
-
-# Support for network volumes
-ADD runpod-worker-comfyui/src/extra_model_paths.yaml ./
-
-# Go back to root
+# Stay in root directory
 WORKDIR /
 
 # Install RunPod handler dependencies (lightweight)
 RUN uv pip install --no-cache runpod requests websocket-client \
     && rm -rf /root/.cache/uv && rm -rf /tmp/*
+
+# Copy extra_model_paths.yaml to /etc for later use in runtime-init
+# (We don't create /comfyui yet - let comfy-cli do it at runtime)
+# This is done AFTER cleanup to ensure it persists
+COPY runpod-worker-comfyui/src/extra_model_paths.yaml /etc/extra_model_paths.yaml
 
 # ============================================================================
 # Stage 2: Final Configuration
