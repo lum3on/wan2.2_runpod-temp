@@ -22,6 +22,8 @@ ENV PIP_NO_INPUT=1
 RUN apt-get update && apt-get install -y \
     python3.12 \
     python3.12-venv \
+    python3.12-dev \
+    build-essential \
     git \
     wget \
     curl \
