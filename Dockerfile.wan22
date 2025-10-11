@@ -1,7 +1,7 @@
 # WAN 2.2 RunPod Template - Custom Dockerfile
-# Based on runpod/worker-comfyui with CUDA 12.8.1, PyTorch 2.8, and JupyterLab
+# Based on runpod/worker-comfyui with CUDA 12.8.1, PyTorch nightly, and JupyterLab
 # Author: AI IDE Agent
-# Date: 2025-10-09
+# Date: 2025-10-11 (Updated to use PyTorch nightly for CUDA 12.8 support)
 
 # ============================================================================
 # Stage 1: Base image with CUDA 12.8.1 and ComfyUI
@@ -11,7 +11,7 @@ FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04 AS base
 
 # Build arguments
 ARG COMFYUI_VERSION=v0.3.55
-ARG PYTORCH_VERSION=2.8.0
+# Note: Using nightly builds for CUDA 12.8 support (stable version doesn't exist yet)
 
 # Environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -53,9 +53,10 @@ RUN uv pip install comfy-cli pip setuptools wheel
 # Install ComfyUI with CUDA 12.8 support
 RUN /usr/bin/yes | comfy --workspace /comfyui install --version "${COMFYUI_VERSION}" --nvidia
 
-# Upgrade to PyTorch 2.8.0 with CUDA 12.8 support
-RUN uv pip install --force-reinstall \
-    torch==${PYTORCH_VERSION} \
+# Install PyTorch nightly with CUDA 12.8 support
+# Using --pre flag to get nightly builds since stable CUDA 12.8 support isn't released yet
+RUN uv pip install --pre --force-reinstall \
+    torch \
     torchvision \
     torchaudio \
     --index-url https://download.pytorch.org/whl/cu128
@@ -211,9 +212,9 @@ CMD ["/start.sh"]
 
 # Labels
 LABEL maintainer="WAN 2.2 RunPod Compute Template"
-LABEL description="RunPod COMPUTE template for WAN 2.2 with CUDA 12.8, PyTorch 2.8, ComfyUI v0.3.55, and JupyterLab. ComfyUI on port 8188, JupyterLab on port 8189."
+LABEL description="RunPod COMPUTE template for WAN 2.2 with CUDA 12.8, PyTorch nightly, ComfyUI v0.3.55, and JupyterLab. ComfyUI on port 8188, JupyterLab on port 8189."
 LABEL cuda.version="12.8.1"
-LABEL pytorch.version="2.8.0"
+LABEL pytorch.version="nightly"
 LABEL comfyui.version="v0.3.55"
 LABEL wan.version="2.2"
 LABEL template.type="compute"
