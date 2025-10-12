@@ -18,6 +18,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PIP_PREFER_BINARY=1
 ENV PYTHONUNBUFFERED=1
 ENV CMAKE_BUILD_PARALLEL_LEVEL=8
+ENV HF_HUB_ENABLE_HF_TRANSFER=1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -77,8 +78,9 @@ ADD runpod-worker-comfyui/src/extra_model_paths.yaml ./
 # Go back to root
 WORKDIR /
 
-# Install RunPod handler dependencies and clean up
+# Install RunPod handler dependencies, huggingface-cli for fast downloads, and clean up
 RUN uv pip install --no-cache runpod requests websocket-client \
+    huggingface-hub[cli,hf_transfer] \
     && rm -rf /root/.cache/uv \
     && rm -rf /tmp/*
 

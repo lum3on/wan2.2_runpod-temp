@@ -32,6 +32,10 @@ pip install --no-cache-dir --upgrade \
     torchaudio \
     --index-url https://download.pytorch.org/whl/cu128
 
+echo "⚡ Installing HuggingFace CLI for fast model downloads..."
+uv pip install --no-cache huggingface-hub[cli,hf_transfer]
+export HF_HUB_ENABLE_HF_TRANSFER=1
+
 echo "🧩 Installing custom nodes..."
 cd /comfyui/custom_nodes
 
@@ -62,31 +66,39 @@ uv pip install --no-cache \
     scipy
 
 echo "==================================================================="
-echo "⚡⚡⚡ SAGEATTENTION2++ BUILD STARTING ⚡⚡⚡"
+echo "⚡ SageAttention2++ Build Starting"
 echo "==================================================================="
-echo "📦 Installing SageAttention dependencies (wheel, setuptools, ninja, triton)..."
+echo "📦 Installing SageAttention dependencies..."
 uv pip install --no-cache \
     wheel \
     setuptools \
     packaging \
     ninja \
-    triton
+    triton 2>&1 | grep -E "(Successfully installed|ERROR|error)" || true
 
 echo ""
-echo "==================================================================="
-echo "🚀🚀🚀 BUILDING SAGEATTENTION2++ FROM SOURCE 🚀🚀🚀"
-echo "==================================================================="
-echo "⏳ Cloning SageAttention repository..."
+echo "🚀 Building SageAttention2++ from source..."
+echo "⏳ This may take 5-10 minutes - output logged to /tmp/sageattention_build.log"
+echo ""
+
 cd /tmp
-git clone https://github.com/thu-ml/SageAttention.git
+git clone https://github.com/thu-ml/SageAttention.git > /dev/null 2>&1
 cd SageAttention
 
-echo "⏳ Compiling CUDA kernels with parallel build..."
-echo "💡 This may take 5-10 minutes depending on GPU availability..."
-echo "-------------------------------------------------------------------"
-EXT_PARALLEL=4 NVCC_APPEND_FLAGS="--threads 8" MAX_JOBS=32 python setup.py install
-echo "-------------------------------------------------------------------"
-echo "✅✅✅ SAGEATTENTION2++ BUILD COMPLETE ✅✅✅"
+# Compile with output redirected to log file (Option A)
+echo "⚙️  Compiling CUDA kernels (parallel build with 32 jobs)..."
+EXT_PARALLEL=4 NVCC_APPEND_FLAGS="--threads 8" MAX_JOBS=32 \
+    python setup.py install > /tmp/sageattention_build.log 2>&1
+
+if [ $? -eq 0 ]; then
+    echo "✅ SageAttention2++ build complete!"
+    echo "📄 Full build log available at: /tmp/sageattention_build.log"
+else
+    echo "❌ SageAttention2++ build failed! Check log at: /tmp/sageattention_build.log"
+    tail -n 50 /tmp/sageattention_build.log
+    exit 1
+fi
+
 echo "==================================================================="
 echo ""
 
