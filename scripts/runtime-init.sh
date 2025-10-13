@@ -182,10 +182,15 @@ cd SageAttention
 
 # Compile with output redirected to log file (Option A)
 echo "⚙️  Compiling CUDA kernels (parallel build with 32 jobs)..."
+
+# Temporarily disable exit-on-error to handle build failure gracefully
+set +e
 EXT_PARALLEL=4 NVCC_APPEND_FLAGS="--threads 8" MAX_JOBS=32 \
     pip install . > /tmp/sageattention_build.log 2>&1
+BUILD_EXIT_CODE=$?
+set -e
 
-if [ $? -eq 0 ]; then
+if [ $BUILD_EXIT_CODE -eq 0 ]; then
     echo "✅ SageAttention2++ build complete!"
     echo "📄 Full build log available at: /tmp/sageattention_build.log"
     echo "true" > /tmp/sageattention_installed
