@@ -125,11 +125,19 @@ echo ""\n\
 # Allow operators to tweak verbosity; default is DEBUG\n\
 : "${COMFY_LOG_LEVEL:=DEBUG}"\n\
 \n\
+# Check if SageAttention was successfully installed\n\
+SAGE_FLAG=""\n\
+SAGE_STATUS="DISABLED"\n\
+if [ -f "/tmp/sageattention_installed" ] && [ "$(cat /tmp/sageattention_installed)" = "true" ]; then\n\
+    SAGE_FLAG="--use-sage-attention"\n\
+    SAGE_STATUS="ENABLED"\n\
+fi\n\
+\n\
 echo "==================================================================="\n\
-echo "🎨 STARTING COMFYUI ON PORT 8188 WITH SAGEATTENTION"\n\
+echo "🎨 STARTING COMFYUI ON PORT 8188"\n\
 echo "==================================================================="\n\
 echo "🌐 Access URL: http://<your-pod-ip>:8188"\n\
-echo "⚡ SageAttention: ENABLED (--use-sage-attention)"\n\
+echo "⚡ SageAttention: ${SAGE_STATUS}"\n\
 echo "📊 Log Level: ${COMFY_LOG_LEVEL}"\n\
 echo "-------------------------------------------------------------------"\n\
 \n\
@@ -141,7 +149,7 @@ python -u /comfyui/main.py \\\n\
     --port 8188 \\\n\
     --verbose "${COMFY_LOG_LEVEL}" \\\n\
     --log-stdout \\\n\
-    --use-sage-attention\n' > /start.sh
+    ${SAGE_FLAG}\n' > /start.sh
 
 RUN chmod +x /start.sh
 
