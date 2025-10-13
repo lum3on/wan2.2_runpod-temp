@@ -107,6 +107,12 @@ if [ ! -d "ComfyUI_performance-report" ]; then
     git clone https://github.com/njlent/ComfyUI_performance-report.git
 fi
 
+# Install LanPaint
+if [ ! -d "LanPaint" ]; then
+    echo "Installing LanPaint..."
+    git clone https://github.com/scraed/LanPaint.git
+fi
+
 echo "📚 Installing custom node dependencies..."
 
 # WAN Video Wrapper dependencies

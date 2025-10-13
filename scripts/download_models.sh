@@ -300,24 +300,26 @@ fi
 echo "   ✅ Concurrent downloads: Up to 6 files simultaneously"
 echo ""
 echo "📋 Download Plan:"
-echo "   • Phase 1: Diffusion Models (4 files, ~60GB)"
+echo "   • Phase 1: Diffusion Models (6 files, ~70GB)"
 echo "   • Phase 2: Text Encoders, VAE, LoRAs (6 files, ~15GB)"
 echo "   • Phase 3: Upscale Models (5 files, ~5GB)"
 echo ""
-echo "⏱️  Estimated time: 15-30 minutes (depending on network speed)"
+echo "⏱️  Estimated time: 20-35 minutes (depending on network speed)"
 echo ""
 
 # Phase 1: Diffusion Models
 echo "╔═══════════════════════════════════════════════════════════════════════╗"
-echo "║  PHASE 1/3: Diffusion Models (Core WAN 2.2 Models)                   ║"
-echo "║  Files: 4 | Size: ~60GB | Format: fp16 + fp8_scaled                  ║"
+echo "║  PHASE 1/3: Diffusion Models (Core WAN 2.2 Models + VACE)            ║"
+echo "║  Files: 6 | Size: ~70GB | Format: fp16 + fp8_scaled + bf16           ║"
 echo "╚═══════════════════════════════════════════════════════════════════════╝"
 
 download_parallel \
     "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors $MODEL_DIR/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors" \
     "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors $MODEL_DIR/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors" \
     "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors $MODEL_DIR/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors" \
-    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors $MODEL_DIR/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors"
+    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors $MODEL_DIR/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors" \
+    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Fun/VACE/Wan2_2_Fun_VACE_module_A14B_HIGH_bf16.safetensors $MODEL_DIR/diffusion_models/Wan2_2_Fun_VACE_module_A14B_HIGH_bf16.safetensors" \
+    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Fun/VACE/Wan2_2_Fun_VACE_module_A14B_LOW_bf16.safetensors $MODEL_DIR/diffusion_models/Wan2_2_Fun_VACE_module_A14B_LOW_bf16.safetensors"
 
 # Phase 2: Text Encoders, VAE, LoRAs
 echo "╔═══════════════════════════════════════════════════════════════════════╗"
