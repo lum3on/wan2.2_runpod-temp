@@ -201,18 +201,29 @@ echo ""
 cd /
 rm -rf /tmp/SageAttention
 
-echo "📓 Installing JupyterLab..."
+echo "📓 Installing JupyterLab with full functionality..."
 uv pip install --no-cache \
     jupyterlab \
-    notebook \
+    ipykernel \
+    jupyter-server-terminals \
     ipywidgets \
     matplotlib \
-    pandas
+    pandas \
+    notebook
+
+# Register Python kernel explicitly for JupyterLab
+echo "🔧 Registering Python kernel..."
+python -m ipykernel install --name="python3" --display-name="Python 3 (ipykernel)" --sys-prefix
+
+# Verify kernel installation
+echo "✅ Installed kernels:"
+jupyter kernelspec list
 
 # Create JupyterLab configuration
 echo "⚙️  Configuring JupyterLab..."
 mkdir -p /root/.jupyter
 cat > /root/.jupyter/jupyter_lab_config.py << 'EOF'
+# Server settings
 c.ServerApp.ip = '0.0.0.0'
 c.ServerApp.port = 8189
 c.ServerApp.allow_root = True
@@ -220,8 +231,19 @@ c.ServerApp.open_browser = False
 c.ServerApp.token = ''
 c.ServerApp.password = ''
 c.ServerApp.root_dir = '/comfyui'
+
+# File operations settings
 c.FileContentsManager.delete_to_trash = False
 c.ContentsManager.allow_hidden = True
+
+# Terminal settings - explicitly configure shell
+c.ServerApp.terminado_settings = {
+    'shell_command': ['/bin/bash']
+}
+
+# Enable full file browser capabilities
+c.ContentsManager.allow_hidden = True
+c.FileContentsManager.always_delete_dir = True
 EOF
 
 # Clean up
