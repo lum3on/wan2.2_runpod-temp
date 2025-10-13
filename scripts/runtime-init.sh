@@ -228,6 +228,11 @@ rm -rf /root/.cache/pip
 rm -rf /root/.cache/uv
 rm -rf /tmp/*
 
+# Set proper permissions for JupyterLab file uploads and folder creation
+echo "🔐 Setting permissions for JupyterLab..."
+chmod -R 755 /comfyui
+chown -R root:root /comfyui
+
 # Mark as initialized
 touch /comfyui/.initialized
 
