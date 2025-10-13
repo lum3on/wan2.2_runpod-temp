@@ -232,6 +232,18 @@ c.ServerApp.token = ''
 c.ServerApp.password = ''
 c.ServerApp.root_dir = '/comfyui'
 
+# CRITICAL: Security settings for RunPod proxy access
+# RunPod uses proxy URLs (e.g., xxxxx-8189.proxy.runpod.net) which are not "local"
+# Without these settings, JupyterLab blocks POST requests (file uploads, folder creation)
+# and WebSocket connections (terminal) with 403 Forbidden errors
+c.ServerApp.allow_remote_access = True  # Allow non-local Host headers (RunPod proxy)
+c.ServerApp.allow_origin = '*'          # Allow CORS from any origin
+c.ServerApp.disable_check_xsrf = True   # Disable XSRF protection (safe in isolated container)
+c.ServerApp.trust_xheaders = True       # Trust X-Forwarded-* headers from RunPod proxy
+
+# Enable terminals
+c.ServerApp.terminals_enabled = True
+
 # File operations settings
 c.FileContentsManager.delete_to_trash = False
 c.ContentsManager.allow_hidden = True
