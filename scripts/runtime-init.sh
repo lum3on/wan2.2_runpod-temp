@@ -36,32 +36,6 @@ echo "⚡ Installing HuggingFace CLI for fast model downloads..."
 uv pip install --no-cache huggingface-hub[cli,hf_transfer]
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
-echo "📓 Installing JupyterLab (early access for backend exploration)..."
-uv pip install --no-cache \
-    jupyterlab \
-    notebook \
-    ipywidgets \
-    matplotlib \
-    pandas
-
-# Create JupyterLab configuration
-echo "⚙️  Configuring JupyterLab..."
-mkdir -p /root/.jupyter
-cat > /root/.jupyter/jupyter_lab_config.py << 'EOF'
-c.ServerApp.ip = '0.0.0.0'
-c.ServerApp.port = 8189
-c.ServerApp.allow_root = True
-c.ServerApp.open_browser = False
-c.ServerApp.token = ''
-c.ServerApp.password = ''
-c.ServerApp.root_dir = '/comfyui'
-EOF
-
-echo "✅ JupyterLab installed and configured!"
-echo "   → Will be available on port 8189 after startup"
-echo "   → Access backend filesystem while models download"
-echo ""
-
 echo "🧩 Installing custom nodes..."
 cd /comfyui/custom_nodes
 
@@ -226,6 +200,27 @@ echo ""
 # Clean up build artifacts
 cd /
 rm -rf /tmp/SageAttention
+
+echo "📓 Installing JupyterLab..."
+uv pip install --no-cache \
+    jupyterlab \
+    notebook \
+    ipywidgets \
+    matplotlib \
+    pandas
+
+# Create JupyterLab configuration
+echo "⚙️  Configuring JupyterLab..."
+mkdir -p /root/.jupyter
+cat > /root/.jupyter/jupyter_lab_config.py << 'EOF'
+c.ServerApp.ip = '0.0.0.0'
+c.ServerApp.port = 8189
+c.ServerApp.allow_root = True
+c.ServerApp.open_browser = False
+c.ServerApp.token = ''
+c.ServerApp.password = ''
+c.ServerApp.root_dir = '/comfyui'
+EOF
 
 # Clean up
 echo "🧹 Cleaning up..."

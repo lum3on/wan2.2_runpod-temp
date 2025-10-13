@@ -32,13 +32,11 @@ A production-ready Dockerfile with 6 stages:
 - WAN Video Wrapper (kijai's implementation)
 - All WAN 2.2 models (fp8 scaled for efficiency)
 
-#### 🔬 JupyterLab Integration (Early Access!)
-- **NEW:** Available in ~17 minutes (before model downloads complete!)
+#### 🔬 JupyterLab Integration
 - Full file system access to `/comfyui/`
 - Access to all models, custom nodes, outputs
 - No password (for easy access)
 - Port 8189
-- **Parallel productivity:** Explore backend while models download in background
 
 ### 3. **Supporting Files**
 

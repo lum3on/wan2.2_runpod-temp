@@ -86,20 +86,25 @@ RUN printf '#!/usr/bin/env bash\n\
 \n\
 echo "WAN 2.2 RunPod Template - Starting initialization..."\n\
 \n\
-# Run runtime initialization (ComfyUI, PyTorch, JupyterLab, custom nodes)\n\
+# Run runtime initialization (ComfyUI, PyTorch, custom nodes)\n\
 /scripts/runtime-init.sh\n\
 \n\
 # Use libtcmalloc for better memory management\n\
 TCMALLOC="$(ldconfig -p | grep -Po "libtcmalloc.so.\\d" | head -n 1)"\n\
 export LD_PRELOAD="${TCMALLOC}"\n\
 \n\
+echo "Starting services..."\n\
+\n\
+# Download models on first run (uses persistent /workspace if available)\n\
+echo "Checking for WAN 2.2 models..."\n\
+/scripts/download_models.sh\n\
+\n\
 echo "==================================================================="\n\
-echo "🚀 STARTING JUPYTERLAB ON PORT 8189 (EARLY ACCESS)"\n\
+echo "🚀 STARTING JUPYTERLAB ON PORT 8189"\n\
 echo "==================================================================="\n\
 echo "📂 Root directory: /comfyui"\n\
 echo "🌐 Access URL: http://<your-pod-ip>:8189"\n\
 echo "🔓 Authentication: Disabled (no token/password required)"\n\
-echo "💡 TIP: You can now explore the backend while models download!"\n\
 echo "-------------------------------------------------------------------"\n\
 \n\
 # Start JupyterLab in the background on port 8189\n\
@@ -111,21 +116,11 @@ sleep 2\n\
 if ps -p $JUPYTER_PID > /dev/null; then\n\
     echo "✅ JupyterLab started successfully (PID: $JUPYTER_PID)"\n\
     echo "📋 Logs available at: /var/log/jupyter.log"\n\
-    echo "🎯 You can now access JupyterLab while models download in background"\n\
 else\n\
     echo "⚠️  JupyterLab may have failed to start - check /var/log/jupyter.log"\n\
 fi\n\
 echo "==================================================================="\n\
 echo ""\n\
-\n\
-echo "Starting background services..."\n\
-\n\
-# Download models on first run (uses persistent /workspace if available)\n\
-echo "📥 Downloading WAN 2.2 models in background..."\n\
-echo "⏱️  This will take 15-30 minutes (~90GB total)"\n\
-echo "💡 Meanwhile, you can use JupyterLab on port 8189 to explore the backend"\n\
-echo ""\n\
-/scripts/download_models.sh\n\
 \n\
 # Allow operators to tweak verbosity; default is DEBUG\n\
 : "${COMFY_LOG_LEVEL:=DEBUG}"\n\
