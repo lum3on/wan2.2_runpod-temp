@@ -4,6 +4,8 @@
 
 A custom RunPod **COMPUTE** Docker template for WAN 2.2 video generation with CUDA 12.8, PyTorch 2.8, ComfyUI, ComfyUI Manager, WAN Video Wrapper, and JupyterLab.
 
+<!-- Last updated: 2025-12-22 - GHCR token refreshed -->
+
 **Template Type:** Compute (not serverless)
 **ComfyUI:** Port 8188 (directly accessible)
 **JupyterLab:** Port 8189 (full backend access)
