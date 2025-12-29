@@ -43,10 +43,14 @@ cd /comfyui/custom_nodes
 
 # Install ComfyUI Manager (pinned to v3.37.1 - last version before v3.38 security migration)
 # v3.38+ requires ComfyUI v0.3.76+ which we don't use
-if [ ! -d "ComfyUI-Manager" ]; then
-    echo "Installing ComfyUI-Manager v3.37.1..."
-    git clone --branch 3.37.1 --depth 1 https://github.com/ltdrdata/ComfyUI-Manager.git
+# FORCE reinstall to ensure correct version (removes any existing installation)
+MANAGER_VERSION="3.37.1"
+if [ -d "ComfyUI-Manager" ]; then
+    echo "Removing existing ComfyUI-Manager to ensure correct version..."
+    rm -rf ComfyUI-Manager
 fi
+echo "Installing ComfyUI-Manager v${MANAGER_VERSION}..."
+git clone --branch ${MANAGER_VERSION} --depth 1 https://github.com/ltdrdata/ComfyUI-Manager.git
 
 # Install ComfyUI-Manager dependencies
 echo "📦 Installing ComfyUI-Manager dependencies..."
