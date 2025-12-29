@@ -135,10 +135,14 @@ if [ ! -d "ComfyUI-WanVideoWrapper" ]; then
     cd ..
 fi
 
-# Install ComfyUI-KJNodes
+# Install ComfyUI-KJNodes (pinned to v1.1.9 - commit e64b67b8f4aa3a555cec61cf18ee7d1cfbb3e5f0)
+# This version is tested and stable with our ComfyUI setup
 if [ ! -d "ComfyUI-KJNodes" ]; then
-    echo "Installing ComfyUI-KJNodes..."
+    echo "Installing ComfyUI-KJNodes v1.1.9..."
     git clone https://github.com/kijai/ComfyUI-KJNodes.git
+    cd ComfyUI-KJNodes
+    git checkout e64b67b8f4aa3a555cec61cf18ee7d1cfbb3e5f0
+    cd ..
 fi
 
 # Install ComfyUI-VideoHelperSuite
@@ -206,10 +210,11 @@ uv pip install --no-cache \
     opencv-python \
     scipy
 
-# ComfyUI-KJNodes dependencies
+# ComfyUI-KJNodes dependencies (v1.1.9)
+# Note: librosa is in pyproject.toml but not requirements.txt, so we add it explicitly
 if [ -f "ComfyUI-KJNodes/requirements.txt" ]; then
     echo "  → ComfyUI-KJNodes..."
-    uv pip install --no-cache -r ComfyUI-KJNodes/requirements.txt
+    uv pip install --no-cache -r ComfyUI-KJNodes/requirements.txt librosa
 fi
 
 # ComfyUI-VideoHelperSuite dependencies
