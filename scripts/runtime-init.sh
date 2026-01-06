@@ -247,15 +247,21 @@ if [ -f "ComfyUI_Fill-Nodes/requirements.txt" ]; then
 fi
 
 # ComfyUI_LayerStyle dependencies
+# Requires opencv-contrib-python for guidedFilter function
 if [ -f "ComfyUI_LayerStyle/requirements.txt" ]; then
     echo "  → ComfyUI_LayerStyle..."
     uv pip install --no-cache -r ComfyUI_LayerStyle/requirements.txt
+    # Install opencv-contrib-python for guidedFilter (replaces opencv-python)
+    uv pip install --no-cache opencv-contrib-python
 fi
 
 # ComfyUI_LayerStyle_Advance dependencies
+# Requires specific timm version for RotaryEmbedding compatibility
 if [ -f "ComfyUI_LayerStyle_Advance/requirements.txt" ]; then
     echo "  → ComfyUI_LayerStyle_Advance..."
     uv pip install --no-cache -r ComfyUI_LayerStyle_Advance/requirements.txt
+    # Pin timm to compatible version (0.9.x has RotaryEmbedding)
+    uv pip install --no-cache "timm>=0.9.0,<1.0.0"
 fi
 
 # ComfyUI_performance-report dependencies
