@@ -193,6 +193,12 @@ if [ ! -d "LanPaint" ]; then
     git clone https://github.com/scraed/LanPaint.git
 fi
 
+# Install ComfyUI-MatAnyone (video matting node)
+if [ ! -d "ComfyUI-MatAnyone" ]; then
+    echo "Installing ComfyUI-MatAnyone..."
+    git clone --recursive https://github.com/FuouM/ComfyUI-MatAnyone.git
+fi
+
 echo "📚 Installing custom node dependencies..."
 
 # WAN Video Wrapper dependencies
@@ -245,6 +251,16 @@ fi
 if [ -f "ComfyUI_performance-report/requirements.txt" ]; then
     echo "  → ComfyUI_performance-report..."
     uv pip install --no-cache -r ComfyUI_performance-report/requirements.txt
+fi
+
+# ComfyUI-MatAnyone dependencies
+if [ -f "ComfyUI-MatAnyone/requirements.txt" ]; then
+    echo "  → ComfyUI-MatAnyone..."
+    uv pip install --no-cache -r ComfyUI-MatAnyone/requirements.txt
+else
+    # Install known dependencies if requirements.txt doesn't exist
+    echo "  → ComfyUI-MatAnyone (manual deps)..."
+    uv pip install --no-cache omegaconf
 fi
 
 echo "✅ Custom nodes and dependencies installed!"
