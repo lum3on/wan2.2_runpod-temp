@@ -5,6 +5,47 @@ echo "========================================="
 echo "WAN 2.2 Model Downloader"
 echo "========================================="
 
+# ============================================================================
+# MODEL DOWNLOAD FLAGS - Set these in RunPod Environment Variables
+# ============================================================================
+# All flags default to "true" if not set. Set to "false" to skip download.
+#
+# DOWNLOAD_WAN_CORE=true     - Core WAN 2.2 T2V models (~60GB)
+# DOWNLOAD_VACE=true         - VACE modules for video editing (~30GB)
+# DOWNLOAD_ANIMATE=true      - Animate 14B model (~28GB)
+# DOWNLOAD_SCAIL=true        - SCAIL preview model (~28GB)
+# DOWNLOAD_CLIP=true         - CLIP text encoder + vision (~12GB)
+# DOWNLOAD_VAE=true          - VAE model (~300MB)
+# DOWNLOAD_LORAS=true        - LoRA models (~3GB)
+# DOWNLOAD_CONTROLNET=true   - ControlNet model (~2GB)
+# DOWNLOAD_DETECTION=true    - Detection model (~40MB)
+# DOWNLOAD_UPSCALE=true      - Upscale models (~5GB)
+# DOWNLOAD_MATANYONE=true    - MatAnyone video matting (~1.5GB)
+#
+# DOWNLOAD_ALL=false         - Set to "false" to disable ALL downloads
+# ============================================================================
+
+# Default all flags to true if not set
+: "${DOWNLOAD_ALL:=true}"
+: "${DOWNLOAD_WAN_CORE:=true}"
+: "${DOWNLOAD_VACE:=true}"
+: "${DOWNLOAD_ANIMATE:=true}"
+: "${DOWNLOAD_SCAIL:=true}"
+: "${DOWNLOAD_CLIP:=true}"
+: "${DOWNLOAD_VAE:=true}"
+: "${DOWNLOAD_LORAS:=true}"
+: "${DOWNLOAD_CONTROLNET:=true}"
+: "${DOWNLOAD_DETECTION:=true}"
+: "${DOWNLOAD_UPSCALE:=true}"
+: "${DOWNLOAD_MATANYONE:=true}"
+
+# If DOWNLOAD_ALL is false, skip everything
+if [ "$DOWNLOAD_ALL" = "false" ]; then
+    echo "⚠️  DOWNLOAD_ALL=false - Skipping all model downloads"
+    echo "   Set individual flags or DOWNLOAD_ALL=true to enable downloads"
+    exit 0
+fi
+
 # Model storage directory (use RunPod's persistent /workspace if available)
 if [ -d "/workspace" ]; then
     MODEL_DIR="/workspace/models"
@@ -13,6 +54,22 @@ else
     MODEL_DIR="/comfyui/models"
     echo "⚠️  Using container storage: /comfyui/models"
 fi
+
+# Show download configuration
+echo ""
+echo "📋 Download Configuration (set env vars to 'false' to skip):"
+echo "   DOWNLOAD_WAN_CORE=$DOWNLOAD_WAN_CORE     (Core T2V ~60GB)"
+echo "   DOWNLOAD_VACE=$DOWNLOAD_VACE         (VACE ~30GB)"
+echo "   DOWNLOAD_ANIMATE=$DOWNLOAD_ANIMATE      (Animate ~28GB)"
+echo "   DOWNLOAD_SCAIL=$DOWNLOAD_SCAIL        (SCAIL ~28GB)"
+echo "   DOWNLOAD_CLIP=$DOWNLOAD_CLIP         (CLIP ~12GB)"
+echo "   DOWNLOAD_VAE=$DOWNLOAD_VAE          (VAE ~300MB)"
+echo "   DOWNLOAD_LORAS=$DOWNLOAD_LORAS        (LoRAs ~3GB)"
+echo "   DOWNLOAD_CONTROLNET=$DOWNLOAD_CONTROLNET   (ControlNet ~2GB)"
+echo "   DOWNLOAD_DETECTION=$DOWNLOAD_DETECTION    (Detection ~40MB)"
+echo "   DOWNLOAD_UPSCALE=$DOWNLOAD_UPSCALE      (Upscale ~5GB)"
+echo "   DOWNLOAD_MATANYONE=$DOWNLOAD_MATANYONE    (MatAnyone ~1.5GB)"
+echo ""
 
 # Create ALL ComfyUI model directories for maximum compatibility
 echo "📁 Creating complete ComfyUI model folder structure..."
@@ -311,77 +368,145 @@ echo ""
 echo "⏱️  Estimated time: 45-65 minutes (depending on network speed)"
 echo ""
 
-# Phase 1: Diffusion Models
+# Phase 1: Diffusion Models (respects individual flags)
 echo "╔═══════════════════════════════════════════════════════════════════════╗"
 echo "║  PHASE 1/6: Diffusion Models (Core WAN 2.2 + VACE + Animate + SCAIL) ║"
-echo "║  Files: 6 | Size: ~120GB | Format: bf16/fp16                         ║"
 echo "╚═══════════════════════════════════════════════════════════════════════╝"
 
-download_parallel \
-    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors $MODEL_DIR/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors" \
-    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors $MODEL_DIR/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors" \
-    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Fun/VACE/Wan2_2_Fun_VACE_module_A14B_HIGH_bf16.safetensors $MODEL_DIR/diffusion_models/Wan2_2_Fun_VACE_module_A14B_HIGH_bf16.safetensors" \
-    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Fun/VACE/Wan2_2_Fun_VACE_module_A14B_LOW_bf16.safetensors $MODEL_DIR/diffusion_models/Wan2_2_Fun_VACE_module_A14B_LOW_bf16.safetensors" \
-    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_animate_14B_bf16.safetensors $MODEL_DIR/diffusion_models/wan2.2_animate_14B_bf16.safetensors" \
-    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/SCAIL/Wan21-14B-SCAIL-preview_comfy_bf16.safetensors $MODEL_DIR/diffusion_models/Wan21-14B-SCAIL-preview_comfy_bf16.safetensors"
+# Build download list based on flags
+PHASE1_DOWNLOADS=()
+
+if [ "$DOWNLOAD_WAN_CORE" = "true" ]; then
+    echo "   ✅ WAN Core T2V models enabled"
+    PHASE1_DOWNLOADS+=("https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors $MODEL_DIR/diffusion_models/wan2.2_t2v_high_noise_14B_fp16.safetensors")
+    PHASE1_DOWNLOADS+=("https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors $MODEL_DIR/diffusion_models/wan2.2_t2v_low_noise_14B_fp16.safetensors")
+else
+    echo "   ⏭️  WAN Core T2V models SKIPPED (DOWNLOAD_WAN_CORE=false)"
+fi
+
+if [ "$DOWNLOAD_VACE" = "true" ]; then
+    echo "   ✅ VACE modules enabled"
+    PHASE1_DOWNLOADS+=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Fun/VACE/Wan2_2_Fun_VACE_module_A14B_HIGH_bf16.safetensors $MODEL_DIR/diffusion_models/Wan2_2_Fun_VACE_module_A14B_HIGH_bf16.safetensors")
+    PHASE1_DOWNLOADS+=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Fun/VACE/Wan2_2_Fun_VACE_module_A14B_LOW_bf16.safetensors $MODEL_DIR/diffusion_models/Wan2_2_Fun_VACE_module_A14B_LOW_bf16.safetensors")
+else
+    echo "   ⏭️  VACE modules SKIPPED (DOWNLOAD_VACE=false)"
+fi
+
+if [ "$DOWNLOAD_ANIMATE" = "true" ]; then
+    echo "   ✅ Animate model enabled"
+    PHASE1_DOWNLOADS+=("https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_animate_14B_bf16.safetensors $MODEL_DIR/diffusion_models/wan2.2_animate_14B_bf16.safetensors")
+else
+    echo "   ⏭️  Animate model SKIPPED (DOWNLOAD_ANIMATE=false)"
+fi
+
+if [ "$DOWNLOAD_SCAIL" = "true" ]; then
+    echo "   ✅ SCAIL model enabled"
+    PHASE1_DOWNLOADS+=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/SCAIL/Wan21-14B-SCAIL-preview_comfy_bf16.safetensors $MODEL_DIR/diffusion_models/Wan21-14B-SCAIL-preview_comfy_bf16.safetensors")
+else
+    echo "   ⏭️  SCAIL model SKIPPED (DOWNLOAD_SCAIL=false)"
+fi
+
+if [ ${#PHASE1_DOWNLOADS[@]} -gt 0 ]; then
+    download_parallel "${PHASE1_DOWNLOADS[@]}"
+else
+    echo "   ⚠️  No Phase 1 downloads - all diffusion models skipped"
+fi
 
 # Phase 2: CLIP, CLIP Vision, VAE & LoRAs
 echo "╔═══════════════════════════════════════════════════════════════════════╗"
 echo "║  PHASE 2/6: CLIP, CLIP Vision, VAE & LoRAs                           ║"
-echo "║  Files: 6 | Size: ~16GB                                              ║"
 echo "╚═══════════════════════════════════════════════════════════════════════╝"
 
-download_parallel \
-    "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors $MODEL_DIR/clip/umt5_xxl_fp16.safetensors" \
-    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors $MODEL_DIR/clip_vision/clip_vision_h.safetensors" \
-    "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors $MODEL_DIR/vae/wan_2.1_vae.safetensors" \
-    "https://huggingface.co/yo9otatara/model/resolve/main/Instareal_high.safetensors $MODEL_DIR/loras/Instareal_high.safetensors" \
-    "https://huggingface.co/yo9otatara/model/resolve/main/Instareal_low.safetensors $MODEL_DIR/loras/Instareal_low.safetensors" \
-    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Lightx2v/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank256_bf16.safetensors $MODEL_DIR/loras/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank256_bf16.safetensors"
+PHASE2_DOWNLOADS=()
+
+if [ "$DOWNLOAD_CLIP" = "true" ]; then
+    echo "   ✅ CLIP models enabled"
+    PHASE2_DOWNLOADS+=("https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors $MODEL_DIR/clip/umt5_xxl_fp16.safetensors")
+    PHASE2_DOWNLOADS+=("https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors $MODEL_DIR/clip_vision/clip_vision_h.safetensors")
+else
+    echo "   ⏭️  CLIP models SKIPPED (DOWNLOAD_CLIP=false)"
+fi
+
+if [ "$DOWNLOAD_VAE" = "true" ]; then
+    echo "   ✅ VAE model enabled"
+    PHASE2_DOWNLOADS+=("https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors $MODEL_DIR/vae/wan_2.1_vae.safetensors")
+else
+    echo "   ⏭️  VAE model SKIPPED (DOWNLOAD_VAE=false)"
+fi
+
+if [ "$DOWNLOAD_LORAS" = "true" ]; then
+    echo "   ✅ LoRA models enabled"
+    PHASE2_DOWNLOADS+=("https://huggingface.co/yo9otatara/model/resolve/main/Instareal_high.safetensors $MODEL_DIR/loras/Instareal_high.safetensors")
+    PHASE2_DOWNLOADS+=("https://huggingface.co/yo9otatara/model/resolve/main/Instareal_low.safetensors $MODEL_DIR/loras/Instareal_low.safetensors")
+    PHASE2_DOWNLOADS+=("https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Lightx2v/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank256_bf16.safetensors $MODEL_DIR/loras/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank256_bf16.safetensors")
+else
+    echo "   ⏭️  LoRA models SKIPPED (DOWNLOAD_LORAS=false)"
+fi
+
+if [ ${#PHASE2_DOWNLOADS[@]} -gt 0 ]; then
+    download_parallel "${PHASE2_DOWNLOADS[@]}"
+else
+    echo "   ⚠️  No Phase 2 downloads - all CLIP/VAE/LoRA models skipped"
+fi
 
 # Phase 3: ControlNet Models
 echo "╔═══════════════════════════════════════════════════════════════════════╗"
 echo "║  PHASE 3/6: ControlNet Models                                        ║"
-echo "║  Files: 1 | Size: ~2GB                                               ║"
 echo "╚═══════════════════════════════════════════════════════════════════════╝"
 
-download_parallel \
-    "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan21_Uni3C_controlnet_fp16.safetensors $MODEL_DIR/controlnet/Wan21_Uni3C_controlnet_fp16.safetensors"
+if [ "$DOWNLOAD_CONTROLNET" = "true" ]; then
+    echo "   ✅ ControlNet model enabled"
+    download_parallel \
+        "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan21_Uni3C_controlnet_fp16.safetensors $MODEL_DIR/controlnet/Wan21_Uni3C_controlnet_fp16.safetensors"
+else
+    echo "   ⏭️  ControlNet model SKIPPED (DOWNLOAD_CONTROLNET=false)"
+fi
 
 # Phase 4: Detection Models
 echo "╔═══════════════════════════════════════════════════════════════════════╗"
 echo "║  PHASE 4/6: Detection Models                                         ║"
-echo "║  Files: 1 | Size: ~40MB                                              ║"
 echo "╚═══════════════════════════════════════════════════════════════════════╝"
 
-download_parallel \
-    "https://huggingface.co/Wan-AI/Wan2.2-Animate-14B/resolve/main/process_checkpoint/det/yolov10m.onnx $MODEL_DIR/detection/yolov10m.onnx"
+if [ "$DOWNLOAD_DETECTION" = "true" ]; then
+    echo "   ✅ Detection model enabled"
+    download_parallel \
+        "https://huggingface.co/Wan-AI/Wan2.2-Animate-14B/resolve/main/process_checkpoint/det/yolov10m.onnx $MODEL_DIR/detection/yolov10m.onnx"
+else
+    echo "   ⏭️  Detection model SKIPPED (DOWNLOAD_DETECTION=false)"
+fi
 
 # Phase 5: Upscale Models
 echo "╔═══════════════════════════════════════════════════════════════════════╗"
 echo "║  PHASE 5/6: Upscale Models                                           ║"
-echo "║  Files: 5 | Size: ~5GB                                               ║"
 echo "╚═══════════════════════════════════════════════════════════════════════╝"
 
-download_parallel \
-    "https://huggingface.co/yo9otatara/model/resolve/main/4xNomosUniDAT_otf.pth $MODEL_DIR/upscale_models/4xNomosUniDAT_otf.pth" \
-    "https://huggingface.co/yo9otatara/model/resolve/main/4x-ClearRealityV1.pth $MODEL_DIR/upscale_models/4x-ClearRealityV1.pth" \
-    "https://huggingface.co/yo9otatara/model/resolve/main/1xSkinContrast-High-SuperUltraCompact.pth $MODEL_DIR/upscale_models/1xSkinContrast-High-SuperUltraCompact.pth" \
-    "https://huggingface.co/yo9otatara/model/resolve/main/1xDeJPG_realplksr_otf.safetensors $MODEL_DIR/upscale_models/1xDeJPG_realplksr_otf.safetensors" \
-    "https://huggingface.co/yo9otatara/model/resolve/main/4x-UltraSharpV2_Lite.pth $MODEL_DIR/upscale_models/4x-UltraSharpV2_Lite.pth"
+if [ "$DOWNLOAD_UPSCALE" = "true" ]; then
+    echo "   ✅ Upscale models enabled"
+    download_parallel \
+        "https://huggingface.co/yo9otatara/model/resolve/main/4xNomosUniDAT_otf.pth $MODEL_DIR/upscale_models/4xNomosUniDAT_otf.pth" \
+        "https://huggingface.co/yo9otatara/model/resolve/main/4x-ClearRealityV1.pth $MODEL_DIR/upscale_models/4x-ClearRealityV1.pth" \
+        "https://huggingface.co/yo9otatara/model/resolve/main/1xSkinContrast-High-SuperUltraCompact.pth $MODEL_DIR/upscale_models/1xSkinContrast-High-SuperUltraCompact.pth" \
+        "https://huggingface.co/yo9otatara/model/resolve/main/1xDeJPG_realplksr_otf.safetensors $MODEL_DIR/upscale_models/1xDeJPG_realplksr_otf.safetensors" \
+        "https://huggingface.co/yo9otatara/model/resolve/main/4x-UltraSharpV2_Lite.pth $MODEL_DIR/upscale_models/4x-UltraSharpV2_Lite.pth"
+else
+    echo "   ⏭️  Upscale models SKIPPED (DOWNLOAD_UPSCALE=false)"
+fi
 
 # Phase 6: MatAnyone Model (Custom Node Checkpoint)
 echo "╔═══════════════════════════════════════════════════════════════════════╗"
 echo "║  PHASE 6/6: MatAnyone Model                                          ║"
-echo "║  Files: 1 | Size: ~1.5GB                                             ║"
 echo "╚═══════════════════════════════════════════════════════════════════════╝"
 
-# Create MatAnyone checkpoint directory if it doesn't exist
-MATANYONE_DIR="/comfyui/custom_nodes/ComfyUI-MatAnyone/checkpoint"
-mkdir -p "$MATANYONE_DIR"
-
-download_parallel \
-    "https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth $MATANYONE_DIR/matanyone.pth"
+if [ "$DOWNLOAD_MATANYONE" = "true" ]; then
+    echo "   ✅ MatAnyone model enabled"
+    # Create MatAnyone checkpoint directory if it doesn't exist
+    MATANYONE_DIR="/comfyui/custom_nodes/ComfyUI-MatAnyone/checkpoint"
+    mkdir -p "$MATANYONE_DIR"
+    download_parallel \
+        "https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth $MATANYONE_DIR/matanyone.pth"
+else
+    echo "   ⏭️  MatAnyone model SKIPPED (DOWNLOAD_MATANYONE=false)"
+fi
 
 # Final summary
 echo ""
