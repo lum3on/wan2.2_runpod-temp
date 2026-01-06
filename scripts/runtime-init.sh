@@ -196,9 +196,18 @@ if [ ! -d "LanPaint" ]; then
 fi
 
 # Install ComfyUI-MatAnyone (video matting node)
-if [ ! -d "ComfyUI-MatAnyone" ]; then
+# Force reinstall if __init__.py is missing (incomplete clone)
+if [ ! -f "ComfyUI-MatAnyone/__init__.py" ]; then
     echo "Installing ComfyUI-MatAnyone..."
+    rm -rf ComfyUI-MatAnyone
     git clone --recursive https://github.com/FuouM/ComfyUI-MatAnyone.git
+    # Verify the clone was successful
+    if [ -f "ComfyUI-MatAnyone/__init__.py" ]; then
+        echo "  ✅ ComfyUI-MatAnyone installed successfully"
+        ls -la ComfyUI-MatAnyone/
+    else
+        echo "  ❌ ComfyUI-MatAnyone installation failed - __init__.py not found"
+    fi
 fi
 
 echo "📚 Installing custom node dependencies..."
@@ -255,14 +264,15 @@ if [ -f "ComfyUI_performance-report/requirements.txt" ]; then
     uv pip install --no-cache -r ComfyUI_performance-report/requirements.txt
 fi
 
-# ComfyUI-MatAnyone dependencies
-if [ -f "ComfyUI-MatAnyone/requirements.txt" ]; then
+# ComfyUI-MatAnyone dependencies (torch is already installed, just need omegaconf)
+if [ -d "ComfyUI-MatAnyone" ]; then
     echo "  → ComfyUI-MatAnyone..."
-    uv pip install --no-cache -r ComfyUI-MatAnyone/requirements.txt
-else
-    # Install known dependencies if requirements.txt doesn't exist
-    echo "  → ComfyUI-MatAnyone (manual deps)..."
+    # omegaconf is the main dependency (torch is already installed)
     uv pip install --no-cache omegaconf
+    if [ -f "ComfyUI-MatAnyone/requirements.txt" ]; then
+        # Also install from requirements.txt in case there are other deps
+        uv pip install --no-cache -r ComfyUI-MatAnyone/requirements.txt
+    fi
 fi
 
 echo "✅ Custom nodes and dependencies installed!"
