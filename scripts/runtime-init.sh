@@ -246,6 +246,12 @@ if [ ! -f "ComfyUI-MatAnyone/__init__.py" ]; then
     fi
 fi
 
+# Install ComfyUI-Custom-Scripts (pythongosssss) - no requirements.txt needed
+if [ ! -d "ComfyUI-Custom-Scripts" ]; then
+    echo "Installing ComfyUI-Custom-Scripts..."
+    git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git
+fi
+
 echo "📚 Installing custom node dependencies..."
 
 # WAN Video Wrapper dependencies
