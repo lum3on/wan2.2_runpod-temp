@@ -47,14 +47,20 @@ fi
 
 # Only install PyTorch and dependencies on first init
 if [ "$ALREADY_INITIALIZED" = false ]; then
-    # Install PyTorch 2.7.1 with CUDA 12.8 support (pinned version for stability)
-    # Note: Latest PyTorch (2.9.x) may have compatibility issues with some custom nodes
-    echo "🔥 Installing PyTorch 2.7.1 with CUDA 12.8 support..."
-    pip install --no-cache-dir \
-        torch==2.7.1+cu128 \
-        torchvision==0.22.1+cu128 \
-        torchaudio==2.7.1+cu128 \
-        --index-url https://download.pytorch.org/whl/cu128
+    if [ "$COMFYUI_USE_LATEST" = "true" ]; then
+        # When using latest ComfyUI, let it install its own PyTorch version (2.9.x)
+        # via comfy-cli requirements - this ensures compatibility with latest ComfyUI
+        echo "🔥 Skipping PyTorch install - latest ComfyUI will use PyTorch 2.9.x from requirements..."
+    else
+        # Install PyTorch 2.7.1 with CUDA 12.8 support (pinned version for stability)
+        # Note: Latest PyTorch (2.9.x) may have compatibility issues with some custom nodes
+        echo "🔥 Installing PyTorch 2.7.1 with CUDA 12.8 support..."
+        pip install --no-cache-dir \
+            torch==2.7.1+cu128 \
+            torchvision==0.22.1+cu128 \
+            torchaudio==2.7.1+cu128 \
+            --index-url https://download.pytorch.org/whl/cu128
+    fi
 
     echo "⚡ Installing HuggingFace CLI for fast model downloads..."
     uv pip install --no-cache huggingface-hub[cli,hf_transfer]
