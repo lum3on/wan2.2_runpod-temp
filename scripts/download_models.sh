@@ -100,6 +100,7 @@ mkdir -p \
     "$MODEL_DIR/style_models" \
     "$MODEL_DIR/unet" \
     "$MODEL_DIR/upscale_models" \
+    "$MODEL_DIR/latent_upscale_models" \
     "$MODEL_DIR/vae" \
     "$MODEL_DIR/vae_approx" \
     "$MODEL_DIR/animatediff_models" \
@@ -532,8 +533,8 @@ if [ "$DOWNLOAD_LIGHTX" = "true" ]; then
     echo "   ✅ LTX-2 models enabled"
     download_parallel \
         "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-dev.safetensors $MODEL_DIR/checkpoints/ltx-2-19b-dev.safetensors" \
-        "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors $MODEL_DIR/upscale_models/ltx-2-spatial-upscaler-x2-1.0.safetensors" \
-        "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-temporal-upscaler-x2-1.0.safetensors $MODEL_DIR/upscale_models/ltx-2-temporal-upscaler-x2-1.0.safetensors" \
+        "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors $MODEL_DIR/latent_upscale_models/ltx-2-spatial-upscaler-x2-1.0.safetensors" \
+        "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-temporal-upscaler-x2-1.0.safetensors $MODEL_DIR/latent_upscale_models/ltx-2-temporal-upscaler-x2-1.0.safetensors" \
         "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled-lora-384.safetensors $MODEL_DIR/loras/ltx-2-19b-distilled-lora-384.safetensors" \
         "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it.safetensors $MODEL_DIR/text_encoders/gemma_3_12B_it.safetensors"
 else
