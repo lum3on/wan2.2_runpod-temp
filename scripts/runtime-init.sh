@@ -204,6 +204,27 @@ if [ ! -d "ComfyUI_performance-report" ]; then
     git clone https://github.com/njlent/ComfyUI_performance-report.git
 fi
 
+# Install ComfyUI_Upscale-utils (PRIVATE REPO - requires GITHUB_TOKEN env var)
+# Set GITHUB_TOKEN in RunPod environment variables to enable this
+if [ ! -d "ComfyUI_Upscale-utils" ]; then
+    if [ -n "$GITHUB_TOKEN" ]; then
+        echo "Installing ComfyUI_Upscale-utils (private repo)..."
+        git clone https://${GITHUB_TOKEN}@github.com/njlent/ComfyUI_Upscale-utils.git
+        if [ -d "ComfyUI_Upscale-utils" ]; then
+            echo "  ✅ ComfyUI_Upscale-utils installed successfully"
+            # Install requirements if they exist
+            if [ -f "ComfyUI_Upscale-utils/requirements.txt" ]; then
+                echo "  → Installing ComfyUI_Upscale-utils dependencies..."
+                pip install -r ComfyUI_Upscale-utils/requirements.txt
+            fi
+        else
+            echo "  ❌ ComfyUI_Upscale-utils installation failed"
+        fi
+    else
+        echo "⏭️  Skipping ComfyUI_Upscale-utils (private repo) - GITHUB_TOKEN not set"
+    fi
+fi
+
 # Install LanPaint
 if [ ! -d "LanPaint" ]; then
     echo "Installing LanPaint..."
