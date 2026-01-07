@@ -248,10 +248,19 @@ if [ ! -d "ComfyUI_LayerStyle_Advance" ]; then
     git clone https://github.com/chflame163/ComfyUI_LayerStyle_Advance.git
 fi
 
-# Install ComfyUI_performance-report
-if [ ! -d "ComfyUI_performance-report" ]; then
-    echo "Installing ComfyUI_performance-report..."
-    git clone https://github.com/njlent/ComfyUI_performance-report.git
+# Install ComfyUI_performance-report (skip if using latest ComfyUI - incompatible with new execute signature)
+if [ "$COMFYUI_USE_LATEST" != "true" ]; then
+    if [ ! -d "ComfyUI_performance-report" ]; then
+        echo "Installing ComfyUI_performance-report..."
+        git clone https://github.com/njlent/ComfyUI_performance-report.git
+    fi
+else
+    echo "⚠️ Skipping ComfyUI_performance-report (incompatible with latest ComfyUI)"
+    # Remove existing installation if present to prevent errors
+    if [ -d "ComfyUI_performance-report" ]; then
+        echo "  → Removing existing ComfyUI_performance-report (incompatible)..."
+        rm -rf ComfyUI_performance-report
+    fi
 fi
 
 # Install ComfyUI_Upscale-utils (PRIVATE REPO - requires GITHUB_TOKEN env var)
@@ -356,8 +365,8 @@ if [ -f "ComfyUI_LayerStyle_Advance/requirements.txt" ]; then
     uv pip install --no-cache "timm>=0.9.0,<1.0.0"
 fi
 
-# ComfyUI_performance-report dependencies
-if [ -f "ComfyUI_performance-report/requirements.txt" ]; then
+# ComfyUI_performance-report dependencies (skip if using latest ComfyUI)
+if [ "$COMFYUI_USE_LATEST" != "true" ] && [ -f "ComfyUI_performance-report/requirements.txt" ]; then
     echo "  → ComfyUI_performance-report..."
     uv pip install --no-cache -r ComfyUI_performance-report/requirements.txt
 fi
