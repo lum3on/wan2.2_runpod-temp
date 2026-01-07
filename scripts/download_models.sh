@@ -8,12 +8,13 @@ echo "========================================="
 # ============================================================================
 # MODEL DOWNLOAD FLAGS - Set these in RunPod Environment Variables
 # ============================================================================
-# All flags default to "true" if not set. Set to "false" to skip download.
+# All flags default to DOWNLOAD_ALL value. Set individual flags to override.
 #
-# DOWNLOAD_WAN_CORE=true     - Core WAN 2.2 T2V models (~60GB)
+# DOWNLOAD_WAN_CORE=true     - Core WAN 2.2 T2V models (~60GB) + CLIP/VAE/LoRAs
 # DOWNLOAD_VACE=true         - VACE modules for video editing (~30GB)
 # DOWNLOAD_ANIMATE=true      - Animate 14B model (~28GB)
 # DOWNLOAD_SCAIL=true        - SCAIL preview model (~28GB)
+# DOWNLOAD_LIGHTX=true       - LTX-2 models: checkpoint, upscalers, lora, text encoder (~50GB)
 # DOWNLOAD_CLIP=true         - CLIP text encoder + vision (~12GB)
 # DOWNLOAD_VAE=true          - VAE model (~300MB)
 # DOWNLOAD_LORAS=true        - LoRA models (~3GB)
@@ -22,7 +23,8 @@ echo "========================================="
 # DOWNLOAD_UPSCALE=true      - Upscale models (~5GB)
 # DOWNLOAD_MATANYONE=true    - MatAnyone video matting (~1.5GB)
 #
-# DOWNLOAD_ALL=false         - Set to "false" to disable ALL downloads
+# DOWNLOAD_ALL=true          - Master switch (default: true = download everything)
+#                              Set to "false" then enable individual flags
 # ============================================================================
 
 # DOWNLOAD_ALL defaults to true (downloads everything)
@@ -35,6 +37,7 @@ echo "========================================="
 : "${DOWNLOAD_VACE:=$DOWNLOAD_ALL}"
 : "${DOWNLOAD_ANIMATE:=$DOWNLOAD_ALL}"
 : "${DOWNLOAD_SCAIL:=$DOWNLOAD_ALL}"
+: "${DOWNLOAD_LIGHTX:=$DOWNLOAD_ALL}"
 : "${DOWNLOAD_CLIP:=$DOWNLOAD_ALL}"
 : "${DOWNLOAD_VAE:=$DOWNLOAD_ALL}"
 : "${DOWNLOAD_LORAS:=$DOWNLOAD_ALL}"
@@ -67,6 +70,7 @@ echo "   DOWNLOAD_WAN_CORE=$DOWNLOAD_WAN_CORE     (Core T2V ~60GB)"
 echo "   DOWNLOAD_VACE=$DOWNLOAD_VACE         (VACE ~30GB)"
 echo "   DOWNLOAD_ANIMATE=$DOWNLOAD_ANIMATE      (Animate ~28GB)"
 echo "   DOWNLOAD_SCAIL=$DOWNLOAD_SCAIL        (SCAIL ~28GB)"
+echo "   DOWNLOAD_LIGHTX=$DOWNLOAD_LIGHTX       (LTX-2 ~50GB)"
 echo "   DOWNLOAD_CLIP=$DOWNLOAD_CLIP         (CLIP ~12GB)"
 echo "   DOWNLOAD_VAE=$DOWNLOAD_VAE          (VAE ~300MB)"
 echo "   DOWNLOAD_LORAS=$DOWNLOAD_LORAS        (LoRAs ~3GB)"
@@ -511,6 +515,23 @@ if [ "$DOWNLOAD_MATANYONE" = "true" ]; then
         "https://github.com/pq-yang/MatAnyone/releases/download/v1.0.0/matanyone.pth $MATANYONE_DIR/matanyone.pth"
 else
     echo "   ⏭️  MatAnyone model SKIPPED (DOWNLOAD_MATANYONE=false)"
+fi
+
+# Phase 7: LTX-2 Models (Lightricks)
+echo "╔═══════════════════════════════════════════════════════════════════════╗"
+echo "║  PHASE 7/7: LTX-2 Models (Lightricks)                                ║"
+echo "╚═══════════════════════════════════════════════════════════════════════╝"
+
+if [ "$DOWNLOAD_LIGHTX" = "true" ]; then
+    echo "   ✅ LTX-2 models enabled"
+    download_parallel \
+        "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-dev.safetensors $MODEL_DIR/checkpoints/ltx-2-19b-dev.safetensors" \
+        "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors $MODEL_DIR/upscale_models/ltx-2-spatial-upscaler-x2-1.0.safetensors" \
+        "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-temporal-upscaler-x2-1.0.safetensors $MODEL_DIR/upscale_models/ltx-2-temporal-upscaler-x2-1.0.safetensors" \
+        "https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled-lora-384.safetensors $MODEL_DIR/loras/ltx-2-19b-distilled-lora-384.safetensors" \
+        "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it.safetensors $MODEL_DIR/text_encoders/gemma_3_12B_it.safetensors"
+else
+    echo "   ⏭️  LTX-2 models SKIPPED (DOWNLOAD_LIGHTX=false)"
 fi
 
 # Final summary
