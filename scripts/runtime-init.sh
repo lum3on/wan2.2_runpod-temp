@@ -311,6 +311,30 @@ if [ ! -d "ComfyUI-Custom-Scripts" ]; then
     git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git
 fi
 
+# Install ComfyUI-basic_data_handling
+if [ ! -d "ComfyUI-basic_data_handling" ]; then
+    echo "Installing ComfyUI-basic_data_handling..."
+    git clone https://github.com/StableLlama/ComfyUI-basic_data_handling.git
+fi
+
+# Install ComfyUI-mxToolkit
+if [ ! -d "ComfyUI-mxToolkit" ]; then
+    echo "Installing ComfyUI-mxToolkit..."
+    git clone https://github.com/Smirnov75/ComfyUI-mxToolkit.git
+fi
+
+# Install ComfyUI-Easy-Use
+if [ ! -d "ComfyUI-Easy-Use" ]; then
+    echo "Installing ComfyUI-Easy-Use..."
+    git clone https://github.com/yolain/ComfyUI-Easy-Use.git
+fi
+
+# Install ComfyUI_essentials
+if [ ! -d "ComfyUI_essentials" ]; then
+    echo "Installing ComfyUI_essentials..."
+    git clone https://github.com/cubiq/ComfyUI_essentials.git
+fi
+
 echo "📚 Installing custom node dependencies..."
 
 # WAN Video Wrapper dependencies
@@ -380,6 +404,30 @@ if [ -d "ComfyUI-MatAnyone" ]; then
         # Also install from requirements.txt in case there are other deps
         uv pip install --no-cache -r ComfyUI-MatAnyone/requirements.txt
     fi
+fi
+
+# ComfyUI-Easy-Use dependencies
+if [ -f "ComfyUI-Easy-Use/requirements.txt" ]; then
+    echo "  → ComfyUI-Easy-Use..."
+    uv pip install --no-cache -r ComfyUI-Easy-Use/requirements.txt
+fi
+
+# ComfyUI_essentials dependencies
+if [ -f "ComfyUI_essentials/requirements.txt" ]; then
+    echo "  → ComfyUI_essentials..."
+    uv pip install --no-cache -r ComfyUI_essentials/requirements.txt
+fi
+
+# ComfyUI-mxToolkit dependencies
+if [ -f "ComfyUI-mxToolkit/requirements.txt" ]; then
+    echo "  → ComfyUI-mxToolkit..."
+    uv pip install --no-cache -r ComfyUI-mxToolkit/requirements.txt
+fi
+
+# ComfyUI-basic_data_handling dependencies
+if [ -f "ComfyUI-basic_data_handling/requirements.txt" ]; then
+    echo "  → ComfyUI-basic_data_handling..."
+    uv pip install --no-cache -r ComfyUI-basic_data_handling/requirements.txt
 fi
 
 echo "✅ Custom nodes and dependencies installed!"

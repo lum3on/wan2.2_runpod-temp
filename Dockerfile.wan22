@@ -118,6 +118,22 @@ RUN rm -rf ComfyUI-MatAnyone && \
     ls -la src/core/ && \
     ls -la src/model/
 
+# Install ComfyUI-basic_data_handling
+RUN rm -rf ComfyUI-basic_data_handling && \
+    git clone https://github.com/StableLlama/ComfyUI-basic_data_handling.git
+
+# Install ComfyUI-mxToolkit
+RUN rm -rf ComfyUI-mxToolkit && \
+    git clone https://github.com/Smirnov75/ComfyUI-mxToolkit.git
+
+# Install ComfyUI-Easy-Use
+RUN rm -rf ComfyUI-Easy-Use && \
+    git clone https://github.com/yolain/ComfyUI-Easy-Use.git
+
+# Install ComfyUI_essentials
+RUN rm -rf ComfyUI_essentials && \
+    git clone https://github.com/cubiq/ComfyUI_essentials.git
+
 # Install WAN Video Wrapper dependencies and clean up
 RUN uv pip install --no-cache \
     ftfy \
@@ -137,6 +153,20 @@ RUN uv pip install --no-cache \
 # Install ComfyUI-MatAnyone dependencies and clean up
 RUN uv pip install --no-cache \
     omegaconf \
+    && rm -rf /root/.cache/uv \
+    && rm -rf /tmp/*
+
+# Install ComfyUI-Easy-Use dependencies (if requirements.txt exists)
+RUN if [ -f "ComfyUI-Easy-Use/requirements.txt" ]; then \
+    uv pip install --no-cache -r ComfyUI-Easy-Use/requirements.txt; \
+    fi \
+    && rm -rf /root/.cache/uv \
+    && rm -rf /tmp/*
+
+# Install ComfyUI_essentials dependencies (if requirements.txt exists)
+RUN if [ -f "ComfyUI_essentials/requirements.txt" ]; then \
+    uv pip install --no-cache -r ComfyUI_essentials/requirements.txt; \
+    fi \
     && rm -rf /root/.cache/uv \
     && rm -rf /tmp/*
 
