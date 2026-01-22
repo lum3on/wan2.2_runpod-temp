@@ -134,6 +134,10 @@ RUN rm -rf ComfyUI-Easy-Use && \
 RUN rm -rf ComfyUI_essentials && \
     git clone https://github.com/cubiq/ComfyUI_essentials.git
 
+# Install ComfyUI-Wan-VACE-Prep (no external dependencies)
+RUN rm -rf ComfyUI-Wan-VACE-Prep && \
+    git clone https://github.com/stuttlepress/ComfyUI-Wan-VACE-Prep.git
+
 # Install WAN Video Wrapper dependencies and clean up
 RUN uv pip install --no-cache \
     ftfy \

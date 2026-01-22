@@ -335,6 +335,12 @@ if [ ! -d "ComfyUI_essentials" ]; then
     git clone https://github.com/cubiq/ComfyUI_essentials.git
 fi
 
+# Install ComfyUI-Wan-VACE-Prep (no external dependencies)
+if [ ! -d "ComfyUI-Wan-VACE-Prep" ]; then
+    echo "Installing ComfyUI-Wan-VACE-Prep..."
+    git clone https://github.com/stuttlepress/ComfyUI-Wan-VACE-Prep.git
+fi
+
 echo "📚 Installing custom node dependencies..."
 
 # WAN Video Wrapper dependencies
