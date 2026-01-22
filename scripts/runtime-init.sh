@@ -430,6 +430,10 @@ if [ -f "ComfyUI-basic_data_handling/requirements.txt" ]; then
     uv pip install --no-cache -r ComfyUI-basic_data_handling/requirements.txt
 fi
 
+# ComfyUI core audio dependencies (for nodes_audio.py, nodes_lt_audio.py, nodes_audio_encoder.py)
+echo "  → ComfyUI core audio dependencies..."
+uv pip install --no-cache librosa soundfile
+
 echo "✅ Custom nodes and dependencies installed!"
 
 # ============================================================================

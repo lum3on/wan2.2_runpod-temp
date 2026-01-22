@@ -170,6 +170,25 @@ RUN if [ -f "ComfyUI_essentials/requirements.txt" ]; then \
     && rm -rf /root/.cache/uv \
     && rm -rf /tmp/*
 
+# Install ComfyUI_Fill-Nodes
+RUN rm -rf ComfyUI_Fill-Nodes && \
+    git clone https://github.com/filliptm/ComfyUI_Fill-Nodes.git
+
+# Install ComfyUI_Fill-Nodes dependencies (if requirements.txt exists)
+RUN if [ -f "ComfyUI_Fill-Nodes/requirements.txt" ]; then \
+    uv pip install --no-cache -r ComfyUI_Fill-Nodes/requirements.txt; \
+    fi \
+    && rm -rf /root/.cache/uv \
+    && rm -rf /tmp/*
+
+# Install ComfyUI core audio dependencies for nodes_audio.py, nodes_lt_audio.py, nodes_audio_encoder.py
+# These are required by ComfyUI's built-in audio nodes
+RUN uv pip install --no-cache \
+    librosa \
+    soundfile \
+    && rm -rf /root/.cache/uv \
+    && rm -rf /tmp/*
+
 # Install additional dependencies for SageAttention and clean up
 RUN uv pip install --no-cache \
     wheel \
