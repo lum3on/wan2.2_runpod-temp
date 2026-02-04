@@ -16,6 +16,7 @@ echo "========================================="
 # DOWNLOAD_SCAIL=true        - SCAIL preview model (~28GB)
 # DOWNLOAD_LIGHTX=true       - LTX-2 models: checkpoint, upscalers, lora, text encoder (~50GB)
 # DOWNLOAD_LTX_LORAS=true    - LTX-2 LoRA pack: IC-LoRAs + Camera Control (~2GB)
+# DOWNLOAD_FLUX=true         - FLUX.1-dev models: GGUF diffusion, VAE, ControlNet Upscaler, CLIP (~15GB)
 # DOWNLOAD_CLIP=true         - CLIP text encoder + vision (~12GB)
 # DOWNLOAD_VAE=true          - VAE model (~300MB)
 # DOWNLOAD_LORAS=true        - LoRA models (~3GB)
@@ -40,6 +41,7 @@ echo "========================================="
 : "${DOWNLOAD_SCAIL:=$DOWNLOAD_ALL}"
 : "${DOWNLOAD_LIGHTX:=$DOWNLOAD_ALL}"
 : "${DOWNLOAD_LTX_LORAS:=$DOWNLOAD_ALL}"
+: "${DOWNLOAD_FLUX:=false}"
 : "${DOWNLOAD_CLIP:=$DOWNLOAD_ALL}"
 : "${DOWNLOAD_VAE:=$DOWNLOAD_ALL}"
 : "${DOWNLOAD_LORAS:=$DOWNLOAD_ALL}"
@@ -75,6 +77,7 @@ echo "   DOWNLOAD_ANIMATE=$DOWNLOAD_ANIMATE      (Animate ~28GB)"
 echo "   DOWNLOAD_SCAIL=$DOWNLOAD_SCAIL        (SCAIL ~28GB)"
 echo "   DOWNLOAD_LIGHTX=$DOWNLOAD_LIGHTX       (LTX-2 ~50GB)"
 echo "   DOWNLOAD_LTX_LORAS=$DOWNLOAD_LTX_LORAS    (LTX-2 LoRAs ~2GB)"
+echo "   DOWNLOAD_FLUX=$DOWNLOAD_FLUX        (FLUX.1-dev ~15GB)"
 echo "   DOWNLOAD_CLIP=$DOWNLOAD_CLIP         (CLIP ~12GB)"
 echo "   DOWNLOAD_VAE=$DOWNLOAD_VAE          (VAE ~300MB)"
 echo "   DOWNLOAD_LORAS=$DOWNLOAD_LORAS        (LoRAs ~3GB)"
@@ -99,6 +102,7 @@ mkdir -p \
     "$MODEL_DIR/loras" \
     "$MODEL_DIR/style_models" \
     "$MODEL_DIR/unet" \
+    "$MODEL_DIR/unet/gguf" \
     "$MODEL_DIR/upscale_models" \
     "$MODEL_DIR/latent_upscale_models" \
     "$MODEL_DIR/vae" \
@@ -565,6 +569,25 @@ if [ "$DOWNLOAD_LTX_LORAS" = "true" ]; then
         "https://huggingface.co/Lightricks/LTX-2-19b-LoRA-Camera-Control-Static/resolve/main/ltx-2-19b-lora-camera-control-static.safetensors $MODEL_DIR/loras/ltx-2-19b-lora-camera-control-static.safetensors"
 else
     echo "   ⏭️  LTX-2 LoRA pack SKIPPED (DOWNLOAD_LTX_LORAS=false)"
+fi
+
+# Phase 9: FLUX.1-dev Models
+echo "╔═══════════════════════════════════════════════════════════════════════╗"
+echo "║  PHASE 9: FLUX.1-dev Models                                          ║"
+echo "╚═══════════════════════════════════════════════════════════════════════╝"
+
+if [ "$DOWNLOAD_FLUX" = "true" ]; then
+    echo "   ✅ FLUX.1-dev models enabled"
+    download_parallel \
+        "https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q8_0.gguf $MODEL_DIR/unet/gguf/flux1-dev-Q8_0.gguf" \
+        "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors $MODEL_DIR/vae/flux_ae.safetensors" \
+        "https://huggingface.co/jasperai/Flux.1-dev-Controlnet-Upscaler/resolve/main/diffusion_pytorch_model.safetensors $MODEL_DIR/controlnet/flux_controlnet_upscaler.safetensors" \
+        "https://huggingface.co/zer0int/CLIP-GmP-ViT-L-14/resolve/main/ViT-L-14-TEXT-detail-improved-hiT-GmP-HF.safetensors $MODEL_DIR/clip/ViT-L-14-TEXT-detail-improved-hiT-GmP-HF.safetensors" \
+        "https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/t5xxl_fp16.safetensors $MODEL_DIR/text_encoders/t5xxl_fp16.safetensors" \
+        "https://huggingface.co/Alissonerdx/flux.1-dev-SRPO-LoRas/resolve/main/srpo_128_base_oficial_model_fp16.safetensors $MODEL_DIR/loras/srpo_128_base_oficial_model_fp16.safetensors" \
+        "https://huggingface.co/yo9otatara/model/resolve/main/Flux_Skin_Detailer.safetensors $MODEL_DIR/loras/Flux_Skin_Detailer.safetensors"
+else
+    echo "   ⏭️  FLUX.1-dev models SKIPPED (DOWNLOAD_FLUX=false)"
 fi
 
 # Final summary
