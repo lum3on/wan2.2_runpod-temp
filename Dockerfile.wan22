@@ -215,6 +215,7 @@ RUN uv pip install --no-cache \
     ipywidgets \
     matplotlib \
     pandas \
+    jupyter-archive \
     && rm -rf /root/.cache/uv \
     && rm -rf /tmp/*
 

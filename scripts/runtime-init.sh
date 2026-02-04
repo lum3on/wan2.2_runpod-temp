@@ -853,7 +853,8 @@ uv pip install --no-cache \
     ipywidgets \
     matplotlib \
     pandas \
-    notebook
+    notebook \
+    jupyter-archive
 
 # Register Python kernel explicitly for JupyterLab
 echo "🔧 Registering Python kernel..."
