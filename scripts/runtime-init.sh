@@ -341,6 +341,54 @@ if [ ! -d "ComfyUI-Wan-VACE-Prep" ]; then
     git clone https://github.com/stuttlepress/ComfyUI-Wan-VACE-Prep.git
 fi
 
+# ============================================================================
+# FLUX Custom Nodes - Only installed when DOWNLOAD_FLUX=true
+# ============================================================================
+if [ "$DOWNLOAD_FLUX" = "true" ]; then
+    echo ""
+    echo "🎨 Installing FLUX custom nodes (DOWNLOAD_FLUX=true)..."
+
+    # Install rgthree-comfy (workflow utilities)
+    if [ ! -d "rgthree-comfy" ]; then
+        echo "Installing rgthree-comfy..."
+        git clone https://github.com/rgthree/rgthree-comfy.git
+    fi
+
+    # Install ComfyUI-GGUF (GGUF model support - required for FLUX GGUF models)
+    if [ ! -d "ComfyUI-GGUF" ]; then
+        echo "Installing ComfyUI-GGUF..."
+        git clone https://github.com/city96/ComfyUI-GGUF.git
+    fi
+
+    # Install ComfyUI_UltimateSDUpscale
+    if [ ! -d "ComfyUI_UltimateSDUpscale" ]; then
+        echo "Installing ComfyUI_UltimateSDUpscale..."
+        git clone https://github.com/ssitu/ComfyUI_UltimateSDUpscale.git
+    fi
+
+    # Install ComfyUI-Detail-Daemon
+    if [ ! -d "ComfyUI-Detail-Daemon" ]; then
+        echo "Installing ComfyUI-Detail-Daemon..."
+        git clone https://github.com/Jonseed/ComfyUI-Detail-Daemon.git
+    fi
+
+    # Install ComfyUI-DyPE
+    if [ ! -d "ComfyUI-DyPE" ]; then
+        echo "Installing ComfyUI-DyPE..."
+        git clone https://github.com/wildminder/ComfyUI-DyPE.git
+    fi
+
+    # Install ComfyUI-Flux-Continuum
+    if [ ! -d "ComfyUI-Flux-Continuum" ]; then
+        echo "Installing ComfyUI-Flux-Continuum..."
+        git clone https://github.com/robertvoy/ComfyUI-Flux-Continuum.git
+    fi
+
+    echo "✅ FLUX custom nodes installed!"
+else
+    echo "⏭️  FLUX custom nodes SKIPPED (DOWNLOAD_FLUX=false)"
+fi
+
 echo "📚 Installing custom node dependencies..."
 
 # WAN Video Wrapper dependencies
@@ -439,6 +487,47 @@ fi
 # ComfyUI core audio dependencies (for nodes_audio.py, nodes_lt_audio.py, nodes_audio_encoder.py)
 echo "  → ComfyUI core audio dependencies..."
 uv pip install --no-cache librosa soundfile
+
+# FLUX custom node dependencies (only if DOWNLOAD_FLUX=true)
+if [ "$DOWNLOAD_FLUX" = "true" ]; then
+    echo "  → FLUX custom nodes dependencies..."
+
+    # ComfyUI-GGUF dependencies
+    if [ -f "ComfyUI-GGUF/requirements.txt" ]; then
+        echo "    → ComfyUI-GGUF..."
+        uv pip install --no-cache -r ComfyUI-GGUF/requirements.txt
+    fi
+
+    # rgthree-comfy dependencies
+    if [ -f "rgthree-comfy/requirements.txt" ]; then
+        echo "    → rgthree-comfy..."
+        uv pip install --no-cache -r rgthree-comfy/requirements.txt
+    fi
+
+    # ComfyUI_UltimateSDUpscale dependencies
+    if [ -f "ComfyUI_UltimateSDUpscale/requirements.txt" ]; then
+        echo "    → ComfyUI_UltimateSDUpscale..."
+        uv pip install --no-cache -r ComfyUI_UltimateSDUpscale/requirements.txt
+    fi
+
+    # ComfyUI-Detail-Daemon dependencies
+    if [ -f "ComfyUI-Detail-Daemon/requirements.txt" ]; then
+        echo "    → ComfyUI-Detail-Daemon..."
+        uv pip install --no-cache -r ComfyUI-Detail-Daemon/requirements.txt
+    fi
+
+    # ComfyUI-DyPE dependencies
+    if [ -f "ComfyUI-DyPE/requirements.txt" ]; then
+        echo "    → ComfyUI-DyPE..."
+        uv pip install --no-cache -r ComfyUI-DyPE/requirements.txt
+    fi
+
+    # ComfyUI-Flux-Continuum dependencies
+    if [ -f "ComfyUI-Flux-Continuum/requirements.txt" ]; then
+        echo "    → ComfyUI-Flux-Continuum..."
+        uv pip install --no-cache -r ComfyUI-Flux-Continuum/requirements.txt
+    fi
+fi
 
 echo "✅ Custom nodes and dependencies installed!"
 
