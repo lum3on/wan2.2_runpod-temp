@@ -182,13 +182,14 @@ security_level = weak
 MANAGEREOF
 echo "   ✅ ComfyUI-Manager config also created at /comfyui/user/default/ComfyUI-Manager/config.ini"
 
-# Skip the rest if already initialized
+# Skip custom node installation if already initialized, but continue
+# to SageAttention/JupyterLab sections which must run every startup
 if [ "$ALREADY_INITIALIZED" = true ]; then
     echo "==================================================================="
-    echo "✅ ComfyUI-Manager verified/fixed - skipping remaining setup"
+    echo "✅ ComfyUI-Manager verified/fixed - skipping custom node install"
+    echo "   (SageAttention & JupyterLab will still be checked)"
     echo "==================================================================="
-    exit 0
-fi
+else
 
 echo "🧩 Installing other custom nodes..."
 
@@ -531,6 +532,8 @@ fi
 
 echo "✅ Custom nodes and dependencies installed!"
 
+fi  # End of ALREADY_INITIALIZED=false block (custom nodes section)
+
 # ============================================================================
 # GPU_TYPE Configuration - Set in RunPod Environment Variables
 # ============================================================================
@@ -541,6 +544,17 @@ echo "✅ Custom nodes and dependencies installed!"
 # GPU_TYPE=auto    - Auto-detect from nvidia-smi (default)
 # ============================================================================
 : "${GPU_TYPE:=auto}"
+
+# Quick check: skip SageAttention install if already importable
+SAGE_ALREADY_INSTALLED=false
+if python -c "from sageattention import sageattn" 2>/dev/null; then
+    echo "==================================================================="
+    echo "✅ SageAttention already installed - skipping installation"
+    echo "==================================================================="
+    SAGE_ALREADY_INSTALLED=true
+fi
+
+if [ "$SAGE_ALREADY_INSTALLED" = false ]; then
 
 echo "==================================================================="
 echo "⚡ SageAttention2++ Installation Starting"
@@ -933,6 +947,8 @@ fi
 
 echo "==================================================================="
 echo ""
+
+fi  # End of SAGE_ALREADY_INSTALLED=false block
 
 echo "📓 Installing JupyterLab with full functionality..."
 uv pip install --no-cache \
