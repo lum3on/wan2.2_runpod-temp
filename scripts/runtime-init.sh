@@ -67,6 +67,25 @@ if [ "$ALREADY_INITIALIZED" = false ]; then
 fi
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
+update_node_repo() {
+    local repo_dir="$1"
+
+    if [ -d "$repo_dir/.git" ]; then
+        echo "Updating ${repo_dir}..."
+        git -C "$repo_dir" pull --ff-only || echo "  -> git pull failed for ${repo_dir}, continuing with existing checkout"
+    fi
+}
+
+install_node_requirements() {
+    local repo_dir="$1"
+    shift
+
+    if [ -f "${repo_dir}/requirements.txt" ]; then
+        echo "  -> ${repo_dir}..."
+        uv pip install --no-cache -r "${repo_dir}/requirements.txt" "$@"
+    fi
+}
+
 # ============================================================================
 # ComfyUI-Manager Installation - ALWAYS runs to ensure correct version
 # ============================================================================
@@ -182,16 +201,16 @@ security_level = weak
 MANAGEREOF
 echo "   ✅ ComfyUI-Manager config also created at /comfyui/user/default/ComfyUI-Manager/config.ini"
 
-# Skip custom node installation if already initialized, but continue
-# to SageAttention/JupyterLab sections which must run every startup
+# Custom nodes are refreshed on every startup so persistent volumes can
+# pick up upstream fixes. Missing repos are still cloned on demand.
 if [ "$ALREADY_INITIALIZED" = true ]; then
     echo "==================================================================="
-    echo "✅ ComfyUI-Manager verified/fixed - skipping custom node install"
+    echo "✅ ComfyUI-Manager verified/fixed - refreshing custom nodes"
     echo "   (SageAttention & JupyterLab will still be checked)"
     echo "==================================================================="
 else
-
-echo "🧩 Installing other custom nodes..."
+    echo "🧩 Installing other custom nodes..."
+fi
 
 # Install WAN Video Wrapper (pinned to v1.3.0 - commit d9def84332e50af26ec5cde080d4c3703b837520)
 # This version is tested and stable with our ComfyUI setup
@@ -217,36 +236,48 @@ fi
 if [ ! -d "ComfyUI-VideoHelperSuite" ]; then
     echo "Installing ComfyUI-VideoHelperSuite..."
     git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
+else
+    update_node_repo "ComfyUI-VideoHelperSuite"
 fi
 
 # Install masquerade-nodes-comfyui
 if [ ! -d "masquerade-nodes-comfyui" ]; then
     echo "Installing masquerade-nodes-comfyui..."
     git clone https://github.com/BadCafeCode/masquerade-nodes-comfyui.git
+else
+    update_node_repo "masquerade-nodes-comfyui"
 fi
 
 # Install ComfyLiterals
 if [ ! -d "ComfyLiterals" ]; then
     echo "Installing ComfyLiterals..."
     git clone https://github.com/M1kep/ComfyLiterals.git
+else
+    update_node_repo "ComfyLiterals"
 fi
 
 # Install ComfyUI_Fill-Nodes
 if [ ! -d "ComfyUI_Fill-Nodes" ]; then
     echo "Installing ComfyUI_Fill-Nodes..."
     git clone https://github.com/filliptm/ComfyUI_Fill-Nodes.git
+else
+    update_node_repo "ComfyUI_Fill-Nodes"
 fi
 
 # Install ComfyUI_LayerStyle
 if [ ! -d "ComfyUI_LayerStyle" ]; then
     echo "Installing ComfyUI_LayerStyle..."
     git clone https://github.com/chflame163/ComfyUI_LayerStyle.git
+else
+    update_node_repo "ComfyUI_LayerStyle"
 fi
 
 # Install ComfyUI_LayerStyle_Advance
 if [ ! -d "ComfyUI_LayerStyle_Advance" ]; then
     echo "Installing ComfyUI_LayerStyle_Advance..."
     git clone https://github.com/chflame163/ComfyUI_LayerStyle_Advance.git
+else
+    update_node_repo "ComfyUI_LayerStyle_Advance"
 fi
 
 # Install ComfyUI_performance-report (skip if using latest ComfyUI - incompatible with new execute signature)
@@ -254,6 +285,8 @@ if [ "$COMFYUI_USE_LATEST" != "true" ]; then
     if [ ! -d "ComfyUI_performance-report" ]; then
         echo "Installing ComfyUI_performance-report..."
         git clone https://github.com/njlent/ComfyUI_performance-report.git
+    else
+        update_node_repo "ComfyUI_performance-report"
     fi
 else
     echo "⚠️ Skipping ComfyUI_performance-report (incompatible with latest ComfyUI)"
@@ -269,26 +302,26 @@ fi
 if [ ! -d "ComfyUI_Upscale-utils" ]; then
     if [ -n "$GITHUB_TOKEN" ]; then
         echo "Installing ComfyUI_Upscale-utils (private repo)..."
-        git clone https://${GITHUB_TOKEN}@github.com/njlent/ComfyUI_Upscale-utils.git
+        git clone https://${GITHUB_TOKEN}@github.com/njlent/ComfyUI_Upscale-utils.git || true
         if [ -d "ComfyUI_Upscale-utils" ]; then
             echo "  ✅ ComfyUI_Upscale-utils installed successfully"
-            # Install requirements if they exist
-            if [ -f "ComfyUI_Upscale-utils/requirements.txt" ]; then
-                echo "  → Installing ComfyUI_Upscale-utils dependencies..."
-                pip install -r ComfyUI_Upscale-utils/requirements.txt
-            fi
+            install_node_requirements "ComfyUI_Upscale-utils"
         else
             echo "  ❌ ComfyUI_Upscale-utils installation failed"
         fi
     else
         echo "⏭️  Skipping ComfyUI_Upscale-utils (private repo) - GITHUB_TOKEN not set"
     fi
+elif [ -n "$GITHUB_TOKEN" ]; then
+    update_node_repo "ComfyUI_Upscale-utils"
 fi
 
 # Install LanPaint
 if [ ! -d "LanPaint" ]; then
     echo "Installing LanPaint..."
     git clone https://github.com/scraed/LanPaint.git
+else
+    update_node_repo "LanPaint"
 fi
 
 # Install ComfyUI-MatAnyone (video matting node)
@@ -310,36 +343,56 @@ fi
 if [ ! -d "ComfyUI-Custom-Scripts" ]; then
     echo "Installing ComfyUI-Custom-Scripts..."
     git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git
+else
+    update_node_repo "ComfyUI-Custom-Scripts"
 fi
 
 # Install ComfyUI-basic_data_handling
 if [ ! -d "ComfyUI-basic_data_handling" ]; then
     echo "Installing ComfyUI-basic_data_handling..."
     git clone https://github.com/StableLlama/ComfyUI-basic_data_handling.git
+else
+    update_node_repo "ComfyUI-basic_data_handling"
 fi
 
 # Install ComfyUI-mxToolkit
 if [ ! -d "ComfyUI-mxToolkit" ]; then
     echo "Installing ComfyUI-mxToolkit..."
     git clone https://github.com/Smirnov75/ComfyUI-mxToolkit.git
+else
+    update_node_repo "ComfyUI-mxToolkit"
 fi
 
 # Install ComfyUI-Easy-Use
 if [ ! -d "ComfyUI-Easy-Use" ]; then
     echo "Installing ComfyUI-Easy-Use..."
     git clone https://github.com/yolain/ComfyUI-Easy-Use.git
+else
+    update_node_repo "ComfyUI-Easy-Use"
 fi
 
 # Install ComfyUI_essentials
 if [ ! -d "ComfyUI_essentials" ]; then
     echo "Installing ComfyUI_essentials..."
     git clone https://github.com/cubiq/ComfyUI_essentials.git
+else
+    update_node_repo "ComfyUI_essentials"
 fi
 
 # Install ComfyUI-Wan-VACE-Prep (no external dependencies)
 if [ ! -d "ComfyUI-Wan-VACE-Prep" ]; then
     echo "Installing ComfyUI-Wan-VACE-Prep..."
     git clone https://github.com/stuttlepress/ComfyUI-Wan-VACE-Prep.git
+else
+    update_node_repo "ComfyUI-Wan-VACE-Prep"
+fi
+
+# Install comfyui_lum3on-upscale
+if [ ! -d "comfyui_lum3on-upscale" ]; then
+    echo "Installing comfyui_lum3on-upscale..."
+    git clone https://github.com/LumeonLAB/comfyui_lum3on-upscale.git
+else
+    update_node_repo "comfyui_lum3on-upscale"
 fi
 
 # ============================================================================
@@ -415,16 +468,10 @@ if [ -f "ComfyUI-KJNodes/requirements.txt" ]; then
 fi
 
 # ComfyUI-VideoHelperSuite dependencies
-if [ -f "ComfyUI-VideoHelperSuite/requirements.txt" ]; then
-    echo "  → ComfyUI-VideoHelperSuite..."
-    uv pip install --no-cache -r ComfyUI-VideoHelperSuite/requirements.txt
-fi
+install_node_requirements "ComfyUI-VideoHelperSuite"
 
 # ComfyUI_Fill-Nodes dependencies
-if [ -f "ComfyUI_Fill-Nodes/requirements.txt" ]; then
-    echo "  → ComfyUI_Fill-Nodes..."
-    uv pip install --no-cache -r ComfyUI_Fill-Nodes/requirements.txt
-fi
+install_node_requirements "ComfyUI_Fill-Nodes"
 
 # ComfyUI_LayerStyle dependencies
 # Requires opencv-contrib-python for guidedFilter function
@@ -462,28 +509,19 @@ if [ -d "ComfyUI-MatAnyone" ]; then
 fi
 
 # ComfyUI-Easy-Use dependencies
-if [ -f "ComfyUI-Easy-Use/requirements.txt" ]; then
-    echo "  → ComfyUI-Easy-Use..."
-    uv pip install --no-cache -r ComfyUI-Easy-Use/requirements.txt
-fi
+install_node_requirements "ComfyUI-Easy-Use"
 
 # ComfyUI_essentials dependencies
-if [ -f "ComfyUI_essentials/requirements.txt" ]; then
-    echo "  → ComfyUI_essentials..."
-    uv pip install --no-cache -r ComfyUI_essentials/requirements.txt
-fi
+install_node_requirements "ComfyUI_essentials"
 
 # ComfyUI-mxToolkit dependencies
-if [ -f "ComfyUI-mxToolkit/requirements.txt" ]; then
-    echo "  → ComfyUI-mxToolkit..."
-    uv pip install --no-cache -r ComfyUI-mxToolkit/requirements.txt
-fi
+install_node_requirements "ComfyUI-mxToolkit"
 
 # ComfyUI-basic_data_handling dependencies
-if [ -f "ComfyUI-basic_data_handling/requirements.txt" ]; then
-    echo "  → ComfyUI-basic_data_handling..."
-    uv pip install --no-cache -r ComfyUI-basic_data_handling/requirements.txt
-fi
+install_node_requirements "ComfyUI-basic_data_handling"
+
+# comfyui_lum3on-upscale dependencies
+install_node_requirements "comfyui_lum3on-upscale"
 
 # ComfyUI core audio dependencies (for nodes_audio.py, nodes_lt_audio.py, nodes_audio_encoder.py)
 echo "  → ComfyUI core audio dependencies..."
@@ -531,8 +569,6 @@ if [ "$DOWNLOAD_FLUX" = "true" ]; then
 fi
 
 echo "✅ Custom nodes and dependencies installed!"
-
-fi  # End of ALREADY_INITIALIZED=false block (custom nodes section)
 
 # ============================================================================
 # GPU_TYPE Configuration - Set in RunPod Environment Variables
