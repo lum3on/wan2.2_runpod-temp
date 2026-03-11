@@ -28,10 +28,11 @@ services:
       - "8189:8189"  # JupyterLab
     
     # Volumes (optional - for persistent storage)
+    # On RunPod, bind /workspace/* into /comfyui/* to keep outputs and models persistent
     volumes:
-      - ./models:/comfyui/models
-      - ./output:/comfyui/output
-      - ./input:/comfyui/input
+      - /workspace/models:/comfyui/models
+      - /workspace/output:/comfyui/output
+      - /workspace/input:/comfyui/input
       - ./custom_nodes:/comfyui/custom_nodes
     
     # Restart policy

@@ -139,6 +139,21 @@ JupyterLab provides full file system access to:
 - `/comfyui/output/` - Generated outputs
 - `/comfyui/input/` - Input files
 
+If you want outputs on RunPod persistent storage without symlinks, bind the workspace volume directly to ComfyUI's output directory:
+
+```yaml
+volumes:
+  - /workspace/output:/comfyui/output
+```
+
+The same pattern applies to models and inputs:
+
+```yaml
+volumes:
+  - /workspace/models:/comfyui/models
+  - /workspace/input:/comfyui/input
+```
+
 **Note**: JupyterLab is configured with no password for easy access. In production, consider adding authentication.
 
 ### Using ComfyUI
