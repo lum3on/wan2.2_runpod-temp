@@ -86,6 +86,8 @@ RUN chmod +x /scripts/runtime-init.sh
 # This allows users to access JupyterLab to download additional models while WAN models are loading
 RUN printf '#!/usr/bin/env bash\n\
 \n\
+set -euo pipefail\n\
+\n\
 echo ""\n\
 echo "╔═══════════════════════════════════════════════════════════════════╗"\n\
 echo "║           WAN 2.2 RunPod Template - Starting Up                   ║"\n\
@@ -93,7 +95,10 @@ echo "╚═══════════════════════�
 echo ""\n\
 \n\
 # Run runtime initialization (ComfyUI, PyTorch, custom nodes, SageAttention)\n\
-/scripts/runtime-init.sh\n\
+if ! /scripts/runtime-init.sh; then\n\
+    echo "ERROR: runtime initialization failed; refusing to start ComfyUI with --use-sage-attention."\n\
+    exit 1\n\
+fi\n\
 \n\
 # Use libtcmalloc for better memory management\n\
 TCMALLOC="$(ldconfig -p | grep -Po "libtcmalloc.so.\\d" | head -n 1)"\n\
@@ -141,6 +146,11 @@ echo "╚═══════════════════════�
 echo "   ⚡ SageAttention: ENABLED"\n\
 echo "   📊 Log Level: ${COMFY_LOG_LEVEL}"\n\
 echo ""\n\
+\n\
+python -c "import sageattention" >/dev/null 2>&1 || {\n\
+    echo "ERROR: sageattention is not importable in /opt/venv; refusing to launch ComfyUI with --use-sage-attention."\n\
+    exit 1\n\
+}\n\
 \n\
 # Start ComfyUI\n\
 python -u /comfyui/main.py \\\n\
