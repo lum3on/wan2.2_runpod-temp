@@ -268,6 +268,22 @@ echo "Starting services..."\n\
 echo "Checking for WAN 2.2 models..."\n\
 /scripts/download_models.sh\n\
 \n\
+# Use RunPod persistent storage for ComfyUI input/output/temp when available.\n\
+if [ -d "/workspace" ]; then\n\
+    export COMFY_OUTPUT_DIR="/workspace/output"\n\
+    export COMFY_INPUT_DIR="/workspace/input"\n\
+    export COMFY_TEMP_DIR="/workspace/temp"\n\
+    mkdir -p "${COMFY_OUTPUT_DIR}" "${COMFY_INPUT_DIR}" "${COMFY_TEMP_DIR}"\n\
+    chmod -R 777 /workspace\n\
+    echo "Using persistent storage for ComfyUI output: ${COMFY_OUTPUT_DIR}"\n\
+else\n\
+    export COMFY_OUTPUT_DIR="/comfyui/output"\n\
+    export COMFY_INPUT_DIR="/comfyui/input"\n\
+    export COMFY_TEMP_DIR="/comfyui/temp"\n\
+    mkdir -p "${COMFY_OUTPUT_DIR}" "${COMFY_INPUT_DIR}" "${COMFY_TEMP_DIR}"\n\
+    echo "Using container storage for ComfyUI output: ${COMFY_OUTPUT_DIR}"\n\
+fi\n\
+\n\
 # Start JupyterLab in the background on port 8189\n\
 echo "Starting JupyterLab on port 8189..."\n\
 jupyter lab --config=/root/.jupyter/jupyter_lab_config.py &\n\
@@ -286,6 +302,9 @@ python -u /comfyui/main.py \\\n\
     --disable-metadata \\\n\
     --listen 0.0.0.0 \\\n\
     --port 8188 \\\n\
+    --input-directory "${COMFY_INPUT_DIR}" \\\n\
+    --output-directory "${COMFY_OUTPUT_DIR}" \\\n\
+    --temp-directory "${COMFY_TEMP_DIR}" \\\n\
     --verbose "${COMFY_LOG_LEVEL}" \\\n\
     --log-stdout \\\n\
     --use-sage-attention\n' > /start.sh

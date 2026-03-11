@@ -1018,6 +1018,17 @@ jupyter kernelspec list
 # Create JupyterLab configuration
 echo "⚙️  Configuring JupyterLab..."
 mkdir -p /root/.jupyter
+
+# Prefer RunPod persistent storage when available.
+if [ -d "/workspace" ]; then
+    JUPYTER_ROOT_DIR="/workspace"
+    mkdir -p /workspace/output /workspace/input /workspace/temp /workspace/models
+    echo "📁 JupyterLab root directory: /workspace"
+else
+    JUPYTER_ROOT_DIR="/comfyui"
+    echo "📁 JupyterLab root directory: /comfyui"
+fi
+
 cat > /root/.jupyter/jupyter_lab_config.py << 'EOF'
 # Server settings
 c.ServerApp.ip = '0.0.0.0'
@@ -1026,7 +1037,7 @@ c.ServerApp.allow_root = True
 c.ServerApp.open_browser = False
 c.ServerApp.token = ''
 c.ServerApp.password = ''
-c.ServerApp.root_dir = '/comfyui'
+c.ServerApp.root_dir = '__JUPYTER_ROOT_DIR__'
 
 # CRITICAL: Security settings for RunPod proxy access
 # RunPod uses proxy URLs (e.g., xxxxx-8189.proxy.runpod.net) which are not "local"
@@ -1054,6 +1065,8 @@ c.ContentsManager.allow_hidden = True
 c.FileContentsManager.always_delete_dir = True
 EOF
 
+sed -i "s|__JUPYTER_ROOT_DIR__|${JUPYTER_ROOT_DIR}|g" /root/.jupyter/jupyter_lab_config.py
+
 # Initialize dummy git repo in /comfyui to prevent hangs
 # Some packages (SageAttention/Triton) try to run `git describe --tags` for version detection
 # If /comfyui isn't a git repo, this can hang forever during workflow execution
@@ -1079,6 +1092,11 @@ rm -rf /tmp/*
 echo "🔐 Setting permissions for JupyterLab..."
 chmod -R 777 /comfyui
 chown -R root:root /comfyui
+
+if [ -d "/workspace" ]; then
+    chmod -R 777 /workspace
+    chown -R root:root /workspace
+fi
 
 # Ensure the .initialized marker is writable
 chmod 666 /comfyui/.initialized 2>/dev/null || true
