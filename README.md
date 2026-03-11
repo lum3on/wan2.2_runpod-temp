@@ -104,6 +104,7 @@ docker-compose -f docker-compose.wan22.yml up -d
    - Environment Variables (optional):
      - `COMFY_LOG_LEVEL=DEBUG`
      - `GPU_TYPE=auto` (see GPU Types below)
+     - `LUMEON_GITHUB_TOKEN=<your_token>` (required for private `LumeonLAB/comfyui_lum3on-upscale`)
 
 3. **Deploy Compute Pod**
    - Go to [RunPod Pods](https://www.runpod.io/console/pods)
@@ -207,6 +208,7 @@ All models are sourced from:
 | `COMFY_LOG_LEVEL` | `DEBUG` | ComfyUI logging level (DEBUG, INFO, WARNING, ERROR) |
 | `GPU_TYPE` | `auto` | GPU type for SageAttention build method (see below) |
 | `COMFYUI_USE_LATEST` | `false` | Use latest ComfyUI instead of pinned v0.3.56 |
+| `LUMEON_GITHUB_TOKEN` | unset | GitHub personal access token used to clone private `LumeonLAB/comfyui_lum3on-upscale` at runtime |
 
 ### GPU_TYPE Values
 

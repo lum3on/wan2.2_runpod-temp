@@ -387,11 +387,21 @@ else
     update_node_repo "ComfyUI-Wan-VACE-Prep"
 fi
 
-# Install comfyui_lum3on-upscale
+# Install comfyui_lum3on-upscale (PRIVATE REPO - requires LUMEON_GITHUB_TOKEN env var)
+# Set LUMEON_GITHUB_TOKEN in RunPod environment variables to enable this
 if [ ! -d "comfyui_lum3on-upscale" ]; then
-    echo "Installing comfyui_lum3on-upscale..."
-    git clone https://github.com/LumeonLAB/comfyui_lum3on-upscale.git
-else
+    if [ -n "$LUMEON_GITHUB_TOKEN" ]; then
+        echo "Installing comfyui_lum3on-upscale (private repo)..."
+        git clone https://${LUMEON_GITHUB_TOKEN}@github.com/LumeonLAB/comfyui_lum3on-upscale.git || true
+        if [ -d "comfyui_lum3on-upscale" ]; then
+            echo "  ✅ comfyui_lum3on-upscale installed successfully"
+        else
+            echo "  ❌ comfyui_lum3on-upscale installation failed"
+        fi
+    else
+        echo "⏭️  Skipping comfyui_lum3on-upscale (private repo) - LUMEON_GITHUB_TOKEN not set"
+    fi
+elif [ -n "$LUMEON_GITHUB_TOKEN" ]; then
     update_node_repo "comfyui_lum3on-upscale"
 fi
 
