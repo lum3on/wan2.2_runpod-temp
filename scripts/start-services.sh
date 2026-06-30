@@ -126,6 +126,7 @@ python -u /comfyui/main.py \
     --port "$COMFY_PORT" \
     --verbose "$COMFY_LOG_LEVEL" \
     --log-stdout \
+    --enable-manager \
     --use-sage-attention &
 COMFY_PID=$!
 

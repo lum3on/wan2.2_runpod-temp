@@ -381,6 +381,27 @@ security_level = weak
 MANAGEREOF
 echo "   ✅ ComfyUI-Manager config also created at /comfyui/user/default/ComfyUI-Manager/config.ini"
 
+write_manager_config() {
+    local config_path="$1"
+    mkdir -p "$(dirname "$config_path")"
+    cat > "$config_path" << 'MANAGEREOF'
+[default]
+security_level = weak
+network_mode = public
+use_uv = True
+allow_git_url_install = false
+allow_pip_install = false
+MANAGEREOF
+    echo "   [OK] ComfyUI-Manager policy config created at $config_path"
+}
+
+# Manager v3.38+ reads /comfyui/user/__manager/config.ini when ComfyUI has
+# the system user API; older versions read /comfyui/user/default/ComfyUI-Manager.
+# The custom-node-local config path is kept for legacy compatibility.
+write_manager_config "/comfyui/user/__manager/config.ini"
+write_manager_config "/comfyui/user/default/ComfyUI-Manager/config.ini"
+write_manager_config "/comfyui/custom_nodes/ComfyUI-Manager/config.ini"
+
 # Custom nodes are refreshed on every startup so persistent volumes can
 # pick up upstream fixes. Missing repos are still cloned on demand.
 if [ "$ALREADY_INITIALIZED" = true ]; then
@@ -573,6 +594,22 @@ else
     update_node_repo "ComfyUI-Wan-VACE-Prep"
 fi
 
+# Install ComfyUI-WanAnimatePreprocess
+if [ ! -d "ComfyUI-WanAnimatePreprocess" ]; then
+    echo "Installing ComfyUI-WanAnimatePreprocess..."
+    git clone https://github.com/kijai/ComfyUI-WanAnimatePreprocess.git
+else
+    update_node_repo "ComfyUI-WanAnimatePreprocess"
+fi
+
+# Install comfyui_controlnet_aux
+if [ ! -d "comfyui_controlnet_aux" ]; then
+    echo "Installing comfyui_controlnet_aux..."
+    git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git
+else
+    update_node_repo "comfyui_controlnet_aux"
+fi
+
 # Install comfyui_lum3on-upscale (PRIVATE REPO - requires LUMEON_GITHUB_TOKEN env var)
 # Set LUMEON_GITHUB_TOKEN in RunPod environment variables to enable this
 if [ ! -d "comfyui_lum3on-upscale" ]; then
@@ -715,6 +752,12 @@ install_node_requirements "ComfyUI-mxToolkit"
 
 # ComfyUI-basic_data_handling dependencies
 install_node_requirements "ComfyUI-basic_data_handling"
+
+# ComfyUI-WanAnimatePreprocess dependencies
+install_node_requirements "ComfyUI-WanAnimatePreprocess"
+
+# comfyui_controlnet_aux dependencies
+install_node_requirements "comfyui_controlnet_aux"
 
 # comfyui_lum3on-upscale dependencies
 install_node_requirements "comfyui_lum3on-upscale"
