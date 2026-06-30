@@ -71,6 +71,24 @@ resolve_latest_semver_tag() {
     printf '%s\n' "$latest_tag"
 }
 
+normalize_version() {
+    printf '%s' "$1" | sed -E 's/^v//'
+}
+
+read_installed_comfyui_version() {
+    python - <<'PY'
+from pathlib import Path
+
+version_file = Path("/comfyui/comfyui_version.py")
+if not version_file.exists():
+    raise SystemExit(0)
+
+namespace = {}
+exec(version_file.read_text(encoding="utf-8", errors="ignore"), namespace)
+print(namespace.get("__version__", ""))
+PY
+}
+
 sync_repo_ref() {
     local repo_dir="$1"
     local repo_url="$2"
@@ -217,7 +235,26 @@ if [ -f "/comfyui/.initialized" ]; then
     ALREADY_INITIALIZED=true
 fi
 
-if [ "$ALREADY_INITIALIZED" = false ] || [ "$COMFYUI_USE_LATEST" = "true" ]; then
+INSTALLED_COMFYUI_VERSION="$(read_installed_comfyui_version || true)"
+EXPECTED_COMFYUI_VERSION="$(normalize_version "$COMFYUI_VERSION")"
+COMFYUI_NEEDS_INSTALL=false
+
+if [ "$ALREADY_INITIALIZED" = false ]; then
+    COMFYUI_NEEDS_INSTALL=true
+elif [ "$COMFYUI_USE_LATEST" = "true" ]; then
+    # Latest mode intentionally refreshes the core checkout on every start.
+    COMFYUI_NEEDS_INSTALL=true
+elif [ -z "$INSTALLED_COMFYUI_VERSION" ]; then
+    echo "⚠️  Could not detect installed ComfyUI version; reinstalling ${COMFYUI_VERSION}."
+    COMFYUI_NEEDS_INSTALL=true
+elif [ "$(normalize_version "$INSTALLED_COMFYUI_VERSION")" != "$EXPECTED_COMFYUI_VERSION" ]; then
+    echo "⚠️  Installed ComfyUI ${INSTALLED_COMFYUI_VERSION} does not match selected ${COMFYUI_VERSION}; reinstalling."
+    COMFYUI_NEEDS_INSTALL=true
+else
+    echo "✅ Installed ComfyUI ${INSTALLED_COMFYUI_VERSION} matches selected ${COMFYUI_VERSION}."
+fi
+
+if [ "$COMFYUI_NEEDS_INSTALL" = true ]; then
     cd /
     # COMFY_SKIP_FETCH_REGISTRY=1 prevents the slow "FETCH ComfyRegistry Data" during init
     # The registry fetch will happen when ComfyUI actually starts
@@ -228,6 +265,12 @@ if [ "$ALREADY_INITIALIZED" = false ] || [ "$COMFYUI_USE_LATEST" = "true" ]; the
     else
         echo "📦 Installing ComfyUI ${COMFYUI_VERSION:-v0.3.56} (stable)..."
         COMFY_SKIP_FETCH_REGISTRY=1 /usr/bin/yes | comfy --workspace /comfyui install --version "${COMFYUI_VERSION:-v0.3.56}" --nvidia
+    fi
+
+    INSTALLED_COMFYUI_VERSION="$(read_installed_comfyui_version || true)"
+    if [ "$(normalize_version "$INSTALLED_COMFYUI_VERSION")" != "$EXPECTED_COMFYUI_VERSION" ]; then
+        echo "❌ ComfyUI install ended on ${INSTALLED_COMFYUI_VERSION:-unknown}, expected ${COMFYUI_VERSION}."
+        exit 1
     fi
 fi
 
