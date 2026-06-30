@@ -1,17 +1,19 @@
 # WAN 2.2 RunPod Template - Custom Dockerfile
-# Based on runpod/worker-comfyui with CUDA 12.8.1, PyTorch nightly, and JupyterLab
+# Based on runpod/worker-comfyui with CUDA 12.8.1, stable CUDA PyTorch, and JupyterLab
 # Author: AI IDE Agent
-# Date: 2025-10-11 (Updated to use PyTorch nightly for CUDA 12.8 support)
+# Date: 2025-10-11 (updated for stable CUDA PyTorch profiles)
 
 # ============================================================================
 # Stage 1: Base image with CUDA 12.8.1 and ComfyUI
 # ============================================================================
-# Using devel image (includes nvcc) for SageAttention2++ compilation at runtime
-FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04 AS base
+# Using devel image (includes nvcc) for SageAttention2++ compilation at runtime.
+# Override CUDA_IMAGE together with CUDA_PROFILE=cu130 only when a CUDA 13 stack is explicitly selected.
+ARG CUDA_IMAGE=nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
+FROM ${CUDA_IMAGE} AS base
 
 # Build arguments
 ARG COMFYUI_VERSION=v0.3.56
-# Note: Using nightly builds for CUDA 12.8 support (stable version doesn't exist yet)
+ARG CUDA_PROFILE=cu128
 
 # Environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -19,6 +21,7 @@ ENV PIP_PREFER_BINARY=1
 ENV PYTHONUNBUFFERED=1
 ENV CMAKE_BUILD_PARALLEL_LEVEL=8
 ENV HF_HUB_ENABLE_HF_TRANSFER=1
+ENV CUDA_PROFILE=${CUDA_PROFILE}
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -58,15 +61,31 @@ RUN uv pip install comfy-cli pip setuptools wheel
 # COMFY_SKIP_FETCH_REGISTRY=1 prevents the slow "FETCH ComfyRegistry Data" during build
 RUN COMFY_SKIP_FETCH_REGISTRY=1 /usr/bin/yes | comfy --workspace /comfyui install --version "${COMFYUI_VERSION}" --nvidia
 
-# Install PyTorch with CUDA 12.8 support
-# Using regular pip instead of uv pip for better compatibility with PyTorch index
-# This will install the latest available version (including nightly builds if needed)
+# Install the selected stable CUDA PyTorch stack.
 # CRITICAL: Use --no-cache-dir to prevent disk space issues and clean up after installation
-RUN pip install --no-cache-dir --upgrade --force-reinstall \
-    torch \
-    torchvision \
-    torchaudio \
-    --index-url https://download.pytorch.org/whl/cu128 \
+RUN case "$CUDA_PROFILE" in \
+        cu128) \
+            PYTORCH_INDEX_URL="https://download.pytorch.org/whl/cu128"; \
+            TORCH_VERSION="2.11.0+cu128"; \
+            TORCHVISION_VERSION="0.26.0+cu128"; \
+            TORCHAUDIO_VERSION="2.11.0+cu128"; \
+            ;; \
+        cu130) \
+            PYTORCH_INDEX_URL="https://download.pytorch.org/whl/cu130"; \
+            TORCH_VERSION="2.11.0+cu130"; \
+            TORCHVISION_VERSION="0.26.0+cu130"; \
+            TORCHAUDIO_VERSION="2.11.0+cu130"; \
+            ;; \
+        *) \
+            echo "Unsupported CUDA_PROFILE=$CUDA_PROFILE"; \
+            exit 1; \
+            ;; \
+    esac \
+    && pip install --no-cache-dir --upgrade --force-reinstall \
+        "torch==${TORCH_VERSION}" \
+        "torchvision==${TORCHVISION_VERSION}" \
+        "torchaudio==${TORCHAUDIO_VERSION}" \
+        --index-url "$PYTORCH_INDEX_URL" \
     && rm -rf /root/.cache/pip \
     && rm -rf /tmp/*
 
@@ -193,13 +212,13 @@ RUN uv pip install --no-cache \
     && rm -rf /root/.cache/uv \
     && rm -rf /tmp/*
 
-# Install additional dependencies for SageAttention and clean up
+# Install additional build dependencies for SageAttention and clean up.
+# Triton is provided by the selected PyTorch wheel and audited at runtime.
 RUN uv pip install --no-cache \
     wheel \
     setuptools \
     packaging \
     ninja \
-    triton \
     && rm -rf /root/.cache/uv \
     && rm -rf /tmp/*
 
@@ -305,9 +324,9 @@ CMD ["/start.sh"]
 
 # Labels
 LABEL maintainer="WAN 2.2 RunPod Compute Template"
-LABEL description="RunPod COMPUTE template for WAN 2.2 with CUDA 12.8, PyTorch nightly, ComfyUI v0.3.56, and JupyterLab. ComfyUI on port 8188, JupyterLab on port 8189."
+LABEL description="RunPod COMPUTE template for WAN 2.2 with CUDA 12.8, stable CUDA PyTorch, ComfyUI v0.3.56, SageAttention, and JupyterLab. ComfyUI on port 8188, JupyterLab on port 8189."
 LABEL cuda.version="12.8.1"
-LABEL pytorch.version="nightly"
+LABEL pytorch.version="2.11.0"
 LABEL comfyui.version="v0.3.56"
 LABEL wan.version="2.2"
 LABEL template.type="compute"

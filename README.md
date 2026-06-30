@@ -2,7 +2,7 @@
 
 ![Docker Build](https://github.com/lum3on/wan2.2_runpod-temp/actions/workflows/docker-build.yml/badge.svg)
 
-A custom RunPod **COMPUTE** Docker template for WAN 2.2 video generation with CUDA 12.8, PyTorch 2.8, ComfyUI, ComfyUI Manager, WAN Video Wrapper, and JupyterLab.
+A custom RunPod **COMPUTE** Docker template for WAN 2.2 video generation with CUDA 12.8, PyTorch 2.11 CUDA wheels, ComfyUI, ComfyUI Manager, WAN Video Wrapper, SageAttention, and JupyterLab.
 
 <!-- Last updated: 2025-12-22 - GHCR token refreshed -->
 
@@ -14,7 +14,7 @@ A custom RunPod **COMPUTE** Docker template for WAN 2.2 video generation with CU
 ## 🎯 Features
 
 - **CUDA 12.8.1** - Latest CUDA support for Blackwell GPUs (RTX 5090, B200)
-- **PyTorch 2.8.0** - Latest PyTorch with CUDA 12.8 support
+- **PyTorch 2.11.0 + cu128** - Stable CUDA 12.8 wheel stack by default
 - **Python 3.12** - Modern Python runtime
 - **ComfyUI** - Latest version with full workflow support
 - **SageAttention3** - Optimized attention mechanism for Blackwell GPUs (CRITICAL for performance)
@@ -222,7 +222,8 @@ All models are sourced from:
 |----------|---------|-------------|
 | `COMFY_LOG_LEVEL` | `DEBUG` | ComfyUI logging level (DEBUG, INFO, WARNING, ERROR) |
 | `GPU_TYPE` | `auto` | GPU type for SageAttention build method (see below) |
-| `COMFYUI_USE_LATEST` | `false` | Use latest ComfyUI instead of pinned v0.3.56 |
+| `COMFYUI_USE_LATEST` | `false` | Use latest stable ComfyUI and ComfyUI-Manager release tags instead of pinned v0.3.56/v3.37.1 |
+| `CUDA_PROFILE` / `COMFYUI_CUDA_PROFILE` | `cu128` | CUDA PyTorch wheel profile. `cu128` is default; `cu130` must be selected explicitly with a matching CUDA 13 base image. |
 | `LUMEON_GITHUB_TOKEN` | unset | GitHub personal access token used to clone private `LumeonLAB/comfyui_lum3on-upscale` at runtime |
 
 ### GPU_TYPE Values

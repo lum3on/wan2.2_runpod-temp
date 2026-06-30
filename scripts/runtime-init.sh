@@ -12,10 +12,203 @@ echo "==================================================================="
 # ============================================================================
 # COMFYUI VERSION FLAG - Set in RunPod Environment Variables
 # ============================================================================
-# COMFYUI_USE_LATEST=true   - Install latest ComfyUI version (bleeding edge)
+# COMFYUI_USE_LATEST=true   - Install latest stable ComfyUI release tag
 # COMFYUI_USE_LATEST=false  - Use pinned stable version v0.3.56 (default)
 # ============================================================================
 : "${COMFYUI_USE_LATEST:=false}"
+: "${COMFYUI_DEFAULT_VERSION:=v0.3.56}"
+: "${COMFYUI_CUDA_PROFILE:=${CUDA_PROFILE:-cu128}}"
+
+CUDA_PROFILE="$COMFYUI_CUDA_PROFILE"
+COMFYUI_REPO_URL="https://github.com/Comfy-Org/ComfyUI.git"
+MANAGER_REPO_URL="https://github.com/Comfy-Org/ComfyUI-Manager.git"
+WAN_WRAPPER_REPO_URL="https://github.com/kijai/ComfyUI-WanVideoWrapper.git"
+KJNODES_REPO_URL="https://github.com/kijai/ComfyUI-KJNodes.git"
+LATEST_WAN_WRAPPER_REF="088128b224242e110d3906c6750e9a3a348a659b"
+LATEST_KJNODES_REF="bc8e4ce4254bcd0050383386ee2f9d753dbf1fa5"
+CUDA_CONSTRAINTS_FILE="/tmp/comfy-cuda-stack-constraints.txt"
+
+case "$CUDA_PROFILE" in
+    cu128)
+        PYTORCH_INDEX_URL="https://download.pytorch.org/whl/cu128"
+        TORCH_VERSION="2.11.0+cu128"
+        TORCHVISION_VERSION="0.26.0+cu128"
+        TORCHAUDIO_VERSION="2.11.0+cu128"
+        EXPECTED_TORCH_FLAVOR="cu128"
+        EXPECTED_CUDA_VERSION="12.8"
+        ;;
+    cu130)
+        PYTORCH_INDEX_URL="https://download.pytorch.org/whl/cu130"
+        TORCH_VERSION="2.11.0+cu130"
+        TORCHVISION_VERSION="0.26.0+cu130"
+        TORCHAUDIO_VERSION="2.11.0+cu130"
+        EXPECTED_TORCH_FLAVOR="cu130"
+        EXPECTED_CUDA_VERSION="13.0"
+        ;;
+    *)
+        echo "Unsupported CUDA profile: $CUDA_PROFILE"
+        echo "Supported profiles: cu128, cu130"
+        exit 1
+        ;;
+esac
+
+resolve_latest_semver_tag() {
+    local repo_url="$1"
+    local tag_pattern="$2"
+    local latest_tag
+
+    latest_tag=$(git ls-remote --tags --refs "$repo_url" "$tag_pattern" \
+        | awk -F/ '{print $NF}' \
+        | grep -E '^v?[0-9]+[.][0-9]+[.][0-9]+$' \
+        | sort -V \
+        | tail -n1)
+
+    if [ -z "$latest_tag" ]; then
+        echo "Failed to resolve latest stable semver tag from $repo_url" >&2
+        exit 1
+    fi
+
+    printf '%s\n' "$latest_tag"
+}
+
+sync_repo_ref() {
+    local repo_dir="$1"
+    local repo_url="$2"
+    local ref="$3"
+
+    if [ -d "$repo_dir/.git" ]; then
+        echo "  -> Updating ${repo_dir} to ${ref}"
+        git -C "$repo_dir" fetch --tags --force origin
+    else
+        echo "  -> Cloning ${repo_dir} at ${ref}"
+        rm -rf "$repo_dir"
+        git clone "$repo_url" "$repo_dir"
+    fi
+
+    git -C "$repo_dir" checkout --force "$ref"
+    git -C "$repo_dir" reset --hard "$ref"
+}
+
+log_repo_sha() {
+    local repo_dir="$1"
+    if [ -d "$repo_dir/.git" ]; then
+        echo "  -> ${repo_dir} SHA: $(git -C "$repo_dir" rev-parse HEAD)"
+    fi
+}
+
+write_cuda_constraints() {
+    python - "$CUDA_CONSTRAINTS_FILE" <<'PY'
+import sys
+from importlib.metadata import distributions
+
+path = sys.argv[1]
+protected = {"torch", "torchvision", "torchaudio", "triton"}
+lines = []
+
+for dist in distributions():
+    name = dist.metadata.get("Name", "")
+    normalized = name.lower().replace("_", "-")
+    if normalized in protected or normalized.startswith("nvidia-"):
+        lines.append(f"{name}=={dist.version}")
+
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write("\n".join(sorted(set(lines))) + "\n")
+PY
+    echo "CUDA/PyTorch constraints written to ${CUDA_CONSTRAINTS_FILE}:"
+    sed 's/^/  /' "$CUDA_CONSTRAINTS_FILE"
+}
+
+pip_install_runtime() {
+    if [ -f "$CUDA_CONSTRAINTS_FILE" ]; then
+        uv pip install --no-cache -c "$CUDA_CONSTRAINTS_FILE" "$@"
+    else
+        uv pip install --no-cache "$@"
+    fi
+}
+
+audit_pytorch_cuda_stack() {
+    python - "$CUDA_PROFILE" "$EXPECTED_TORCH_FLAVOR" "$EXPECTED_CUDA_VERSION" <<'PY'
+import sys
+
+profile, expected_flavor, expected_cuda = sys.argv[1:4]
+
+try:
+    import torch
+except Exception as exc:
+    print(f"PyTorch import failed: {exc}")
+    sys.exit(1)
+
+print(f"torch.__version__ = {torch.__version__}")
+print(f"torch.version.cuda = {torch.version.cuda}")
+
+if f"+{expected_flavor}" not in torch.__version__:
+    print(f"Expected PyTorch flavor +{expected_flavor} for profile {profile}")
+    sys.exit(1)
+
+if not torch.version.cuda or not torch.version.cuda.startswith(expected_cuda):
+    print(f"Expected torch.version.cuda to start with {expected_cuda} for profile {profile}")
+    sys.exit(1)
+
+if torch.cuda.is_available():
+    print(f"torch.cuda.get_device_name(0) = {torch.cuda.get_device_name(0)}")
+    print(f"torch.cuda.get_device_capability(0) = {torch.cuda.get_device_capability(0)}")
+else:
+    print("torch.cuda.is_available() = False")
+
+try:
+    import triton
+except Exception as exc:
+    print(f"triton import failed: {exc}")
+    sys.exit(1)
+
+print(f"triton.__version__ = {triton.__version__}")
+PY
+}
+
+ensure_cuda_pytorch_stack() {
+    echo "Installing/verifying CUDA profile ${CUDA_PROFILE}: ${TORCH_VERSION}, ${TORCHVISION_VERSION}, ${TORCHAUDIO_VERSION}"
+
+    if python - "$TORCH_VERSION" "$TORCHVISION_VERSION" "$TORCHAUDIO_VERSION" <<'PY'
+import sys
+from importlib.metadata import version, PackageNotFoundError
+
+expected = {
+    "torch": sys.argv[1],
+    "torchvision": sys.argv[2],
+    "torchaudio": sys.argv[3],
+}
+
+for package, expected_version in expected.items():
+    try:
+        installed = version(package)
+    except PackageNotFoundError:
+        sys.exit(1)
+    if installed != expected_version:
+        sys.exit(1)
+PY
+    then
+        echo "  -> Selected PyTorch CUDA stack already installed"
+    else
+        pip install --no-cache-dir --upgrade --force-reinstall \
+            "torch==${TORCH_VERSION}" \
+            "torchvision==${TORCHVISION_VERSION}" \
+            "torchaudio==${TORCHAUDIO_VERSION}" \
+            --index-url "$PYTORCH_INDEX_URL"
+    fi
+
+    audit_pytorch_cuda_stack
+    write_cuda_constraints
+}
+
+if [ "$COMFYUI_USE_LATEST" = "true" ]; then
+    COMFYUI_VERSION="${COMFYUI_VERSION:-$(resolve_latest_semver_tag "$COMFYUI_REPO_URL" "refs/tags/v*")}"
+    MANAGER_VERSION="${MANAGER_VERSION:-$(resolve_latest_semver_tag "$MANAGER_REPO_URL" "refs/tags/*")}"
+    echo "COMFYUI_USE_LATEST=true resolved to stable ComfyUI ${COMFYUI_VERSION}"
+    echo "Latest stable ComfyUI-Manager resolved to ${MANAGER_VERSION}"
+else
+    COMFYUI_VERSION="${COMFYUI_VERSION:-$COMFYUI_DEFAULT_VERSION}"
+    MANAGER_VERSION="${MANAGER_VERSION:-3.37.1}"
+fi
 
 # Check if already initialized (for persistent storage)
 ALREADY_INITIALIZED=false
@@ -24,15 +217,14 @@ if [ -f "/comfyui/.initialized" ]; then
     ALREADY_INITIALIZED=true
 fi
 
-if [ "$ALREADY_INITIALIZED" = false ]; then
+if [ "$ALREADY_INITIALIZED" = false ] || [ "$COMFYUI_USE_LATEST" = "true" ]; then
     cd /
     # COMFY_SKIP_FETCH_REGISTRY=1 prevents the slow "FETCH ComfyRegistry Data" during init
     # The registry fetch will happen when ComfyUI actually starts
 
     if [ "$COMFYUI_USE_LATEST" = "true" ]; then
-        echo "📦 Installing ComfyUI (LATEST version)..."
-        echo "   ⚠️  Note: Latest version may have compatibility issues with some nodes"
-        COMFY_SKIP_FETCH_REGISTRY=1 /usr/bin/yes | comfy --workspace /comfyui install --nvidia
+        echo "📦 Installing ComfyUI ${COMFYUI_VERSION} (latest stable release)..."
+        COMFY_SKIP_FETCH_REGISTRY=1 /usr/bin/yes | comfy --workspace /comfyui install --version "$COMFYUI_VERSION" --nvidia
     else
         echo "📦 Installing ComfyUI ${COMFYUI_VERSION:-v0.3.56} (stable)..."
         COMFY_SKIP_FETCH_REGISTRY=1 /usr/bin/yes | comfy --workspace /comfyui install --version "${COMFYUI_VERSION:-v0.3.56}" --nvidia
@@ -45,24 +237,11 @@ if [ -f "/etc/extra_model_paths.yaml" ] && [ ! -f "/comfyui/extra_model_paths.ya
     cp /etc/extra_model_paths.yaml /comfyui/extra_model_paths.yaml
 fi
 
-# Only install PyTorch and dependencies on first init
-if [ "$ALREADY_INITIALIZED" = false ]; then
-    if [ "$COMFYUI_USE_LATEST" = "true" ]; then
-        # When using latest ComfyUI, let it install its own PyTorch version (2.9.x)
-        # via comfy-cli requirements - this ensures compatibility with latest ComfyUI
-        echo "🔥 Skipping PyTorch install - latest ComfyUI will use PyTorch 2.9.x from requirements..."
-    else
-        # Install PyTorch 2.7.1 with CUDA 12.8 support (pinned version for stability)
-        # Note: Latest PyTorch (2.9.x) may have compatibility issues with some custom nodes
-        echo "🔥 Installing PyTorch 2.7.1 with CUDA 12.8 support..."
-        pip install --no-cache-dir \
-            torch==2.7.1+cu128 \
-            torchvision==0.22.1+cu128 \
-            torchaudio==2.7.1+cu128 \
-            --index-url https://download.pytorch.org/whl/cu128
-    fi
+# Install the selected CUDA PyTorch stack before any custom-node requirements.
+ensure_cuda_pytorch_stack
 
-    echo "⚡ Installing HuggingFace CLI for fast model downloads..."
+if [ "$ALREADY_INITIALIZED" = false ]; then
+    echo "Installing HuggingFace CLI for fast model downloads..."
     uv pip install --no-cache huggingface-hub[cli,hf_transfer]
 fi
 export HF_HUB_ENABLE_HF_TRANSFER=1
@@ -82,7 +261,7 @@ install_node_requirements() {
 
     if [ -f "${repo_dir}/requirements.txt" ]; then
         echo "  -> ${repo_dir}..."
-        uv pip install --no-cache -r "${repo_dir}/requirements.txt" "$@"
+        pip_install_runtime -r "${repo_dir}/requirements.txt" "$@"
     fi
 }
 
@@ -113,15 +292,16 @@ cd /comfyui/custom_nodes
 if [ "$COMFYUI_USE_LATEST" = "true" ]; then
     # Latest ComfyUI needs latest ComfyUI-Manager
     echo "   📦 Using LATEST ComfyUI-Manager (for latest ComfyUI)..."
-    MANAGER_VERSION="latest"
+    # MANAGER_VERSION was resolved from the latest non-beta semver tag above.
     MANAGER_NEEDS_INSTALL=false
 
     if [ -d "ComfyUI-Manager" ]; then
         # For latest mode, always update to get the newest version
         echo "   🔄 Updating ComfyUI-Manager to latest..."
         cd ComfyUI-Manager
-        git fetch origin
-        git reset --hard origin/main
+        git fetch --tags --force origin
+        git checkout --force "$MANAGER_VERSION"
+        git reset --hard "$MANAGER_VERSION"
         cd ..
         MANAGER_NEEDS_INSTALL=false
     else
@@ -131,13 +311,13 @@ if [ "$COMFYUI_USE_LATEST" = "true" ]; then
     if [ "$MANAGER_NEEDS_INSTALL" = true ]; then
         rm -rf ComfyUI-Manager
         echo "   Installing ComfyUI-Manager (latest) from Comfy-Org..."
-        git clone --depth 1 https://github.com/Comfy-Org/ComfyUI-Manager.git
+        git clone --branch "$MANAGER_VERSION" --depth 1 "$MANAGER_REPO_URL"
     fi
 
     # Install dependencies
     echo "   📦 Installing ComfyUI-Manager dependencies..."
     if [ -f "ComfyUI-Manager/requirements.txt" ]; then
-        pip install -r ComfyUI-Manager/requirements.txt
+        pip_install_runtime -r ComfyUI-Manager/requirements.txt
     fi
 else
     # Stable ComfyUI v0.3.56 needs pinned ComfyUI-Manager v3.37.1
@@ -170,12 +350,12 @@ else
 
         echo "Installing ComfyUI-Manager v${MANAGER_VERSION} from Comfy-Org..."
         # Use the new official Comfy-Org repository (ltdrdata repo redirects here)
-        git clone --branch ${MANAGER_VERSION} --depth 1 https://github.com/Comfy-Org/ComfyUI-Manager.git
+        git clone --branch ${MANAGER_VERSION} --depth 1 "$MANAGER_REPO_URL"
 
         # Install dependencies
         echo "📦 Installing ComfyUI-Manager dependencies..."
         if [ -f "ComfyUI-Manager/requirements.txt" ]; then
-            pip install -r ComfyUI-Manager/requirements.txt
+            pip_install_runtime -r ComfyUI-Manager/requirements.txt
         fi
     fi
 fi
@@ -212,9 +392,12 @@ else
     echo "🧩 Installing other custom nodes..."
 fi
 
-# Install WAN Video Wrapper (pinned to v1.3.0 - commit d9def84332e50af26ec5cde080d4c3703b837520)
-# This version is tested and stable with our ComfyUI setup
-if [ ! -d "ComfyUI-WanVideoWrapper" ]; then
+# Install WAN Video Wrapper.
+if [ "$COMFYUI_USE_LATEST" = "true" ]; then
+    echo "Installing/updating ComfyUI-WanVideoWrapper to latest-stable pinned commit..."
+    sync_repo_ref "ComfyUI-WanVideoWrapper" "$WAN_WRAPPER_REPO_URL" "$LATEST_WAN_WRAPPER_REF"
+    log_repo_sha "ComfyUI-WanVideoWrapper"
+elif [ ! -d "ComfyUI-WanVideoWrapper" ]; then
     echo "Installing ComfyUI-WanVideoWrapper v1.3.0..."
     git clone https://github.com/kijai/ComfyUI-WanVideoWrapper.git
     cd ComfyUI-WanVideoWrapper
@@ -222,9 +405,12 @@ if [ ! -d "ComfyUI-WanVideoWrapper" ]; then
     cd ..
 fi
 
-# Install ComfyUI-KJNodes (pinned to v1.1.9 - commit e64b67b8f4aa3a555cec61cf18ee7d1cfbb3e5f0)
-# This version is tested and stable with our ComfyUI setup
-if [ ! -d "ComfyUI-KJNodes" ]; then
+# Install ComfyUI-KJNodes.
+if [ "$COMFYUI_USE_LATEST" = "true" ]; then
+    echo "Installing/updating ComfyUI-KJNodes to latest-stable pinned commit..."
+    sync_repo_ref "ComfyUI-KJNodes" "$KJNODES_REPO_URL" "$LATEST_KJNODES_REF"
+    log_repo_sha "ComfyUI-KJNodes"
+elif [ ! -d "ComfyUI-KJNodes" ]; then
     echo "Installing ComfyUI-KJNodes v1.1.9..."
     git clone https://github.com/kijai/ComfyUI-KJNodes.git
     cd ComfyUI-KJNodes
@@ -457,7 +643,7 @@ echo "📚 Installing custom node dependencies..."
 
 # WAN Video Wrapper dependencies
 echo "  → WAN Video Wrapper..."
-uv pip install --no-cache \
+pip_install_runtime \
     ftfy \
     accelerate>=1.2.1 \
     einops \
@@ -474,7 +660,7 @@ uv pip install --no-cache \
 # Note: librosa is in pyproject.toml but not requirements.txt, so we add it explicitly
 if [ -f "ComfyUI-KJNodes/requirements.txt" ]; then
     echo "  → ComfyUI-KJNodes..."
-    uv pip install --no-cache -r ComfyUI-KJNodes/requirements.txt librosa
+    pip_install_runtime -r ComfyUI-KJNodes/requirements.txt librosa
 fi
 
 # ComfyUI-VideoHelperSuite dependencies
@@ -487,34 +673,34 @@ install_node_requirements "ComfyUI_Fill-Nodes"
 # Requires opencv-contrib-python for guidedFilter function
 if [ -f "ComfyUI_LayerStyle/requirements.txt" ]; then
     echo "  → ComfyUI_LayerStyle..."
-    uv pip install --no-cache -r ComfyUI_LayerStyle/requirements.txt
+    pip_install_runtime -r ComfyUI_LayerStyle/requirements.txt
     # Install opencv-contrib-python for guidedFilter (replaces opencv-python)
-    uv pip install --no-cache opencv-contrib-python
+    pip_install_runtime opencv-contrib-python
 fi
 
 # ComfyUI_LayerStyle_Advance dependencies
 # Requires specific timm version for RotaryEmbedding compatibility
 if [ -f "ComfyUI_LayerStyle_Advance/requirements.txt" ]; then
     echo "  → ComfyUI_LayerStyle_Advance..."
-    uv pip install --no-cache -r ComfyUI_LayerStyle_Advance/requirements.txt
+    pip_install_runtime -r ComfyUI_LayerStyle_Advance/requirements.txt
     # Pin timm to compatible version (0.9.x has RotaryEmbedding)
-    uv pip install --no-cache "timm>=0.9.0,<1.0.0"
+    pip_install_runtime "timm>=0.9.0,<1.0.0"
 fi
 
 # ComfyUI_performance-report dependencies (skip if using latest ComfyUI)
 if [ "$COMFYUI_USE_LATEST" != "true" ] && [ -f "ComfyUI_performance-report/requirements.txt" ]; then
     echo "  → ComfyUI_performance-report..."
-    uv pip install --no-cache -r ComfyUI_performance-report/requirements.txt
+    pip_install_runtime -r ComfyUI_performance-report/requirements.txt
 fi
 
 # ComfyUI-MatAnyone dependencies (torch is already installed, just need omegaconf)
 if [ -d "ComfyUI-MatAnyone" ]; then
     echo "  → ComfyUI-MatAnyone..."
     # omegaconf is the main dependency (torch is already installed)
-    uv pip install --no-cache omegaconf
+    pip_install_runtime omegaconf
     if [ -f "ComfyUI-MatAnyone/requirements.txt" ]; then
         # Also install from requirements.txt in case there are other deps
-        uv pip install --no-cache -r ComfyUI-MatAnyone/requirements.txt
+        pip_install_runtime -r ComfyUI-MatAnyone/requirements.txt
     fi
 fi
 
@@ -535,7 +721,7 @@ install_node_requirements "comfyui_lum3on-upscale"
 
 # ComfyUI core audio dependencies (for nodes_audio.py, nodes_lt_audio.py, nodes_audio_encoder.py)
 echo "  → ComfyUI core audio dependencies..."
-uv pip install --no-cache librosa soundfile
+pip_install_runtime librosa soundfile
 
 # FLUX custom node dependencies (only if DOWNLOAD_FLUX=true)
 if [ "$DOWNLOAD_FLUX" = "true" ]; then
@@ -544,37 +730,37 @@ if [ "$DOWNLOAD_FLUX" = "true" ]; then
     # ComfyUI-GGUF dependencies
     if [ -f "ComfyUI-GGUF/requirements.txt" ]; then
         echo "    → ComfyUI-GGUF..."
-        uv pip install --no-cache -r ComfyUI-GGUF/requirements.txt
+        pip_install_runtime -r ComfyUI-GGUF/requirements.txt
     fi
 
     # rgthree-comfy dependencies
     if [ -f "rgthree-comfy/requirements.txt" ]; then
         echo "    → rgthree-comfy..."
-        uv pip install --no-cache -r rgthree-comfy/requirements.txt
+        pip_install_runtime -r rgthree-comfy/requirements.txt
     fi
 
     # ComfyUI_UltimateSDUpscale dependencies
     if [ -f "ComfyUI_UltimateSDUpscale/requirements.txt" ]; then
         echo "    → ComfyUI_UltimateSDUpscale..."
-        uv pip install --no-cache -r ComfyUI_UltimateSDUpscale/requirements.txt
+        pip_install_runtime -r ComfyUI_UltimateSDUpscale/requirements.txt
     fi
 
     # ComfyUI-Detail-Daemon dependencies
     if [ -f "ComfyUI-Detail-Daemon/requirements.txt" ]; then
         echo "    → ComfyUI-Detail-Daemon..."
-        uv pip install --no-cache -r ComfyUI-Detail-Daemon/requirements.txt
+        pip_install_runtime -r ComfyUI-Detail-Daemon/requirements.txt
     fi
 
     # ComfyUI-DyPE dependencies
     if [ -f "ComfyUI-DyPE/requirements.txt" ]; then
         echo "    → ComfyUI-DyPE..."
-        uv pip install --no-cache -r ComfyUI-DyPE/requirements.txt
+        pip_install_runtime -r ComfyUI-DyPE/requirements.txt
     fi
 
     # ComfyUI-Flux-Continuum dependencies
     if [ -f "ComfyUI-Flux-Continuum/requirements.txt" ]; then
         echo "    → ComfyUI-Flux-Continuum..."
-        uv pip install --no-cache -r ComfyUI-Flux-Continuum/requirements.txt
+        pip_install_runtime -r ComfyUI-Flux-Continuum/requirements.txt
     fi
 fi
 
@@ -608,14 +794,11 @@ echo "==================================================================="
 echo "📦 Installing SageAttention dependencies..."
 echo ""
 
-# SageAttention REQUIRES triton to work properly!
-# Without triton, SageAttention will fail silently and output noise
-# Using prebuilt Triton wheel from Kijai for better compatibility with PyTorch 2.7
-TRITON_WHEEL_URL="https://huggingface.co/Kijai/PrecompiledWheels/resolve/main/triton-3.3.0-cp312-cp312-linux_x86_64.whl"
+# SageAttention uses the Triton package resolved by the selected PyTorch wheel.
 
-echo "📦 Installing Triton 3.3.0 from prebuilt wheel (required for SageAttention)..."
-echo "   URL: $TRITON_WHEEL_URL"
-uv pip install --no-cache packaging "$TRITON_WHEEL_URL"
+echo "Using Triton from the selected PyTorch CUDA stack."
+echo "Triton will be audited after SageAttention verification."
+pip_install_runtime packaging
 
 # Auto-detect GPU type if not specified
 if [ "$GPU_TYPE" = "auto" ]; then
@@ -697,6 +880,7 @@ else
 fi
 
 echo "   Final GPU_TYPE=$GPU_TYPE"
+SAGE_VERIFY_CUDA_CALL=false
 
 # Determine installation method based on GPU type
 case "$GPU_TYPE" in
@@ -712,7 +896,7 @@ case "$GPU_TYPE" in
 
         # Install build dependencies
         echo "📦 Installing build dependencies (wheel, setuptools, ninja)..."
-        uv pip install --no-cache wheel setuptools ninja
+        pip_install_runtime wheel setuptools ninja
 
         # Clone and build SageAttention from source
         cd /tmp
@@ -771,7 +955,7 @@ case "$GPU_TYPE" in
 
         # Install build dependencies
         echo "📦 Installing build dependencies (wheel, setuptools, ninja)..."
-        uv pip install --no-cache wheel setuptools ninja
+        pip_install_runtime wheel setuptools ninja
 
         # Clone and build SageAttention from source
         cd /tmp
@@ -830,7 +1014,7 @@ case "$GPU_TYPE" in
 
         # Install build dependencies
         echo "📦 Installing build dependencies (wheel, setuptools, ninja)..."
-        uv pip install --no-cache wheel setuptools ninja
+        pip_install_runtime wheel setuptools ninja
 
         # Clone and build SageAttention from source
         cd /tmp
@@ -888,7 +1072,7 @@ case "$GPU_TYPE" in
 
         SAGE_WHEEL_URL="https://huggingface.co/Kijai/PrecompiledWheels/resolve/main/sageattention-2.2.0-cp312-cp312-linux_x86_64.whl"
         echo "📥 Downloading: $SAGE_WHEEL_URL"
-        uv pip install --no-cache "$SAGE_WHEEL_URL"
+        pip_install_runtime "$SAGE_WHEEL_URL"
 
         if [ $? -eq 0 ]; then
             echo ""
@@ -912,7 +1096,7 @@ case "$GPU_TYPE" in
 
         SAGE_WHEEL_URL="https://huggingface.co/Kijai/PrecompiledWheels/resolve/main/sageattention-2.2.0-cp312-cp312-linux_x86_64.whl"
         echo "📥 Downloading: $SAGE_WHEEL_URL"
-        uv pip install --no-cache "$SAGE_WHEEL_URL"
+        pip_install_runtime "$SAGE_WHEEL_URL"
 
         if [ $? -eq 0 ]; then
             echo ""
@@ -923,6 +1107,12 @@ case "$GPU_TYPE" in
             exit 1
         fi
         SAGE_VERIFY_SM90=false
+        ;;
+esac
+
+case "$GPU_TYPE" in
+    PRO_BLACKWELL|RTX50|pro_blackwell|rtx50)
+        SAGE_VERIFY_CUDA_CALL=true
         ;;
 esac
 
@@ -994,10 +1184,32 @@ fi
 echo "==================================================================="
 echo ""
 
+if [ "$SAGE_VERIFY_CUDA_CALL" = true ]; then
+    echo "Running SM120 SageAttention CUDA smoke test..."
+    python - <<'PY'
+import sys
+import torch
+from sageattention import sageattn
+
+if not torch.cuda.is_available():
+    print("CUDA is not available for SageAttention smoke test")
+    sys.exit(1)
+
+device = torch.device("cuda:0")
+q = torch.randn((1, 1, 16, 64), device=device, dtype=torch.float16)
+k = torch.randn((1, 1, 16, 64), device=device, dtype=torch.float16)
+v = torch.randn((1, 1, 16, 64), device=device, dtype=torch.float16)
+out = sageattn(q, k, v, tensor_layout="HND", is_causal=False)
+torch.cuda.synchronize()
+print(f"SageAttention CUDA smoke output shape = {tuple(out.shape)}")
+PY
+fi
+
 fi  # End of SAGE_ALREADY_INSTALLED=false block
 
+
 echo "📓 Installing JupyterLab with full functionality..."
-uv pip install --no-cache \
+pip_install_runtime \
     jupyterlab \
     ipykernel \
     jupyter-server-terminals \
@@ -1006,6 +1218,9 @@ uv pip install --no-cache \
     pandas \
     notebook \
     jupyter-archive
+
+echo "Final PyTorch CUDA stack audit after all runtime package installs:"
+audit_pytorch_cuda_stack
 
 # Register Python kernel explicitly for JupyterLab
 echo "🔧 Registering Python kernel..."
@@ -1089,4 +1304,3 @@ touch /comfyui/.initialized
 echo "==================================================================="
 echo "✅ Runtime initialization complete!"
 echo "==================================================================="
-
