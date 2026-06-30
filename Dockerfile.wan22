@@ -311,6 +311,11 @@ python -u /comfyui/main.py \\\n\
 
 RUN chmod +x /start.sh
 
+# Use the checked-in startup script so RunPod access URLs and 8188 readiness
+# checks stay reviewable instead of being hidden in the generated printf block.
+COPY scripts/start-services.sh /start.sh
+RUN chmod +x /start.sh
+
 # Prevent pip from asking for confirmation
 ENV PIP_NO_INPUT=1
 
@@ -332,4 +337,3 @@ LABEL wan.version="2.2"
 LABEL template.type="compute"
 LABEL ports.comfyui="8188"
 LABEL ports.jupyterlab="8189"
-

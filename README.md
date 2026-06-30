@@ -100,7 +100,7 @@ docker-compose -f docker-compose.wan22.yml up -d
    - Click "New Template" or use existing template
    - Set Docker Image: `ghcr.io/lum3on/wan22-runpod:latest`
    - Container Disk: 50 GB (minimum)
-   - **Expose HTTP Ports:** `8188,8189` (CRITICAL!)
+   - **Expose HTTP Ports:** `8188,8189` (CRITICAL - keep ComfyUI `8188` first)
    - Environment Variables (optional):
      - `COMFY_LOG_LEVEL=DEBUG`
      - `GPU_TYPE=auto` (see GPU Types below)
@@ -111,7 +111,7 @@ docker-compose -f docker-compose.wan22.yml up -d
    - Click "Deploy" or "New Pod"
    - Select your template
    - Configure GPU (RTX 5090 or B200 recommended for SageAttention3)
-   - **Important:** Make sure ports 8188 and 8189 are exposed
+   - **Important:** Make sure ports 8188 and 8189 are exposed, with 8188 listed first
    - Deploy!
 
 4. **Access Your Services**
@@ -129,6 +129,12 @@ After deployment on RunPod, you can access:
 - **JupyterLab**: `https://<pod-id>-8189.proxy.runpod.net`
 
 **Note:** RunPod provides HTTPS proxy URLs for exposed ports. Replace `<pod-id>` with your actual pod ID.
+
+Use the private service port in the RunPod proxy URL, not the mapped public port shown in runtime port mappings. For ComfyUI, the canonical URL is always:
+
+```text
+https://<pod-id>-8188.proxy.runpod.net/
+```
 
 ### JupyterLab Access
 
@@ -305,6 +311,12 @@ Check the build status badge at the top of this README or visit the [Actions pag
 - Check that ComfyUI started successfully in pod logs
 - Try accessing via RunPod's proxy URL: `https://<pod-id>-8188.proxy.runpod.net`
 
+### RunPod Connect link shows Access Denied
+- Open the direct ComfyUI proxy URL: `https://<pod-id>-8188.proxy.runpod.net/`
+- Do not replace `8188` with the mapped public port from runtime port mappings
+- If the direct URL works but the Connect tab link fails, update the RunPod template HTTP ports to `8188,8189` so ComfyUI is first
+- The container startup log prints the canonical ComfyUI and JupyterLab proxy URLs after ComfyUI passes its local readiness check
+
 ## 📚 Additional Resources
 
 - [ComfyUI Documentation](https://github.com/comfyanonymous/ComfyUI)
@@ -339,4 +351,3 @@ For issues and questions:
 ---
 
 **Built with ❤️ for the ComfyUI and RunPod community**
-

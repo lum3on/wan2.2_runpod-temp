@@ -130,7 +130,7 @@ Your Docker image includes:
    - **Template Name:** `WAN 2.2 ComfyUI v0.3.56 - Compute`
    - **Docker Image:** `ghcr.io/lum3on/wan22-runpod:latest` (PUBLIC)
    - **Container Disk:** `50 GB` (minimum)
-   - **Expose HTTP Ports:** `8188,8189` ⚠️ **CRITICAL - Must expose both ports!**
+   - **Expose HTTP Ports:** `8188,8189` ⚠️ **CRITICAL - Must expose both ports, with 8188 first!**
 
    **Environment Variables (Optional):**
    ```
@@ -164,6 +164,8 @@ Once deployed, RunPod will provide proxy URLs for your exposed ports:
 
 - **ComfyUI Interface:** `https://<pod-id>-8188.proxy.runpod.net`
 - **JupyterLab:** `https://<pod-id>-8189.proxy.runpod.net`
+
+Use the private service port in the proxy URL. Do not use the mapped public port from RunPod runtime port mappings. If the Connect tab opens an Access Denied page, open `https://<pod-id>-8188.proxy.runpod.net/` directly and update the template HTTP port order to `8188,8189`.
 
 **Finding your URLs:**
 1. Go to your pod in RunPod console
