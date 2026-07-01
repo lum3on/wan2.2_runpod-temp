@@ -35,6 +35,10 @@ KJNODES_REPO_URL="https://github.com/kijai/ComfyUI-KJNodes.git"
 LATEST_WAN_WRAPPER_REF="088128b224242e110d3906c6750e9a3a348a659b"
 LATEST_KJNODES_REF="bc8e4ce4254bcd0050383386ee2f9d753dbf1fa5"
 CUDA_CONSTRAINTS_FILE="/tmp/comfy-cuda-stack-constraints.txt"
+COMFYUI_DIR="/comfyui"
+COMFYUI_VENV="${COMFYUI_DIR}/.venv"
+COMFYUI_PYTHON="${COMFYUI_VENV}/bin/python"
+COMFYUI_JUPYTER="${COMFYUI_VENV}/bin/jupyter"
 
 case "$CUDA_PROFILE" in
     cu128)
@@ -151,15 +155,33 @@ PY
 }
 
 pip_install_runtime() {
+    if [ ! -x "$COMFYUI_PYTHON" ]; then
+        echo "ComfyUI Python environment is missing: ${COMFYUI_PYTHON}" >&2
+        exit 1
+    fi
+
     if [ -f "$CUDA_CONSTRAINTS_FILE" ]; then
-        uv pip install --no-cache \
+        uv pip install --python "$COMFYUI_PYTHON" --no-cache \
             --extra-index-url "$PYTORCH_INDEX_URL" \
             --index-strategy unsafe-best-match \
             -c "$CUDA_CONSTRAINTS_FILE" \
             "$@"
     else
-        uv pip install --no-cache "$@"
+        uv pip install --python "$COMFYUI_PYTHON" --no-cache "$@"
     fi
+}
+
+use_comfyui_python_environment() {
+    if [ ! -x "$COMFYUI_PYTHON" ]; then
+        echo "ComfyUI install did not create the expected Python environment: ${COMFYUI_PYTHON}" >&2
+        exit 1
+    fi
+
+    export VIRTUAL_ENV="$COMFYUI_VENV"
+    export PATH="${COMFYUI_VENV}/bin:/opt/venv/bin:${PATH}"
+    hash -r
+
+    echo "Using ComfyUI runtime Python: $(python -c 'import sys; print(sys.executable)')"
 }
 
 sanitize_requirements_file() {
@@ -324,14 +346,14 @@ PY
             install_args+=("torchaudio==${TORCHAUDIO_VERSION}")
         fi
 
-        pip install --no-cache-dir --upgrade --force-reinstall \
+        "$COMFYUI_PYTHON" -m pip install --no-cache-dir --upgrade --force-reinstall \
             "${install_args[@]}" \
             --index-url "$PYTORCH_INDEX_URL"
     fi
 
     if [ -z "$TORCHAUDIO_VERSION" ]; then
         echo "  -> Removing torchaudio in latest CUDA 13 mode; no protected matching wheel is selected"
-        pip uninstall -y torchaudio >/dev/null 2>&1 || true
+        "$COMFYUI_PYTHON" -m pip uninstall -y torchaudio >/dev/null 2>&1 || true
     fi
 
     audit_pytorch_cuda_stack
@@ -412,6 +434,8 @@ if [ "$COMFYUI_NEEDS_INSTALL" = true ]; then
     fi
 fi
 
+use_comfyui_python_environment
+
 # Copy extra_model_paths.yaml for network volume support
 if [ -f "/etc/extra_model_paths.yaml" ] && [ ! -f "/comfyui/extra_model_paths.yaml" ]; then
     echo "📋 Copying extra_model_paths.yaml for network volume support..."
@@ -423,7 +447,7 @@ ensure_cuda_pytorch_stack
 
 if [ "$ALREADY_INITIALIZED" = false ]; then
     echo "Installing HuggingFace CLI for fast model downloads..."
-    uv pip install --no-cache huggingface-hub[cli,hf_transfer]
+    pip_install_runtime "huggingface-hub[cli,hf_transfer]"
 fi
 export HF_HUB_ENABLE_HF_TRANSFER=1
 
@@ -1023,7 +1047,7 @@ download_and_install_verified_wheel() {
     fi
 
     echo "Hash verified for ${package_label}: ${actual_sha256}"
-    pip install --no-cache-dir --no-deps --force-reinstall "$wheel_path"
+    "$COMFYUI_PYTHON" -m pip install --no-cache-dir --no-deps --force-reinstall "$wheel_path"
 }
 
 verify_sage2_import() {
@@ -1139,7 +1163,7 @@ PY
     export MAX_JOBS=32
 
     build_result=0
-    pip install . --no-cache-dir --no-build-isolation || build_result=$?
+    "$COMFYUI_PYTHON" -m pip install . --no-cache-dir --no-build-isolation || build_result=$?
 
     cd /
     rm -rf /tmp/SageAttention
@@ -1399,7 +1423,7 @@ case "$GPU_TYPE" in
         export MAX_JOBS=32
 
         # Use --no-build-isolation to use already-installed torch/triton for CUDA detection
-        pip install . --no-cache-dir --no-build-isolation
+        "$COMFYUI_PYTHON" -m pip install . --no-cache-dir --no-build-isolation
 
         BUILD_RESULT=$?
 
@@ -1458,7 +1482,7 @@ case "$GPU_TYPE" in
         export MAX_JOBS=32
 
         # Use --no-build-isolation to use already-installed torch/triton for CUDA detection
-        pip install . --no-cache-dir --no-build-isolation
+        "$COMFYUI_PYTHON" -m pip install . --no-cache-dir --no-build-isolation
 
         BUILD_RESULT=$?
 
@@ -1517,7 +1541,7 @@ case "$GPU_TYPE" in
         export MAX_JOBS=32
 
         # Use --no-build-isolation to use already-installed torch/triton for CUDA detection
-        pip install . --no-cache-dir --no-build-isolation
+        "$COMFYUI_PYTHON" -m pip install . --no-cache-dir --no-build-isolation
 
         BUILD_RESULT=$?
 
@@ -1704,11 +1728,11 @@ audit_pytorch_cuda_stack
 
 # Register Python kernel explicitly for JupyterLab
 echo "🔧 Registering Python kernel..."
-python -m ipykernel install --name="python3" --display-name="Python 3 (ipykernel)" --sys-prefix
+"$COMFYUI_PYTHON" -m ipykernel install --name="python3" --display-name="Python 3 (ipykernel)" --sys-prefix
 
 # Verify kernel installation
 echo "✅ Installed kernels:"
-jupyter kernelspec list
+"$COMFYUI_JUPYTER" kernelspec list
 
 # Create JupyterLab configuration
 echo "⚙️  Configuring JupyterLab..."

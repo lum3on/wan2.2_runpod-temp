@@ -6,6 +6,8 @@ JUPYTER_PORT="8189"
 COMFY_LOG_LEVEL="${COMFY_LOG_LEVEL:-DEBUG}"
 SAGE_ATTENTION_BACKEND="${SAGE_ATTENTION_BACKEND:-auto}"
 SAGE_ATTENTION_BACKEND="$(printf '%s' "$SAGE_ATTENTION_BACKEND" | tr '[:upper:]' '[:lower:]')"
+COMFYUI_PYTHON="${COMFYUI_PYTHON:-/comfyui/.venv/bin/python}"
+COMFYUI_JUPYTER="${COMFYUI_JUPYTER:-/comfyui/.venv/bin/jupyter}"
 COMFY_SAGE_ARGS=()
 
 case "$SAGE_ATTENTION_BACKEND" in
@@ -112,6 +114,16 @@ log_section "WAN 2.2 RunPod Template - Starting Up"
 
 /scripts/runtime-init.sh
 
+if [ ! -x "$COMFYUI_PYTHON" ]; then
+    echo "ComfyUI Python not found or not executable: ${COMFYUI_PYTHON}" >&2
+    exit 1
+fi
+
+if [ ! -x "$COMFYUI_JUPYTER" ]; then
+    echo "Jupyter executable not found in ComfyUI environment: ${COMFYUI_JUPYTER}" >&2
+    exit 1
+fi
+
 TCMALLOC="$(ldconfig -p | grep -Po "libtcmalloc.so.\d" | head -n 1 || true)"
 if [ -n "$TCMALLOC" ]; then
     export LD_PRELOAD="$TCMALLOC"
@@ -121,7 +133,7 @@ chmod -R 777 /comfyui
 chown -R root:root /comfyui
 
 log_section "Starting JupyterLab on port ${JUPYTER_PORT}"
-jupyter lab --config=/root/.jupyter/jupyter_lab_config.py > /var/log/jupyter.log 2>&1 &
+"$COMFYUI_JUPYTER" lab --config=/root/.jupyter/jupyter_lab_config.py > /var/log/jupyter.log 2>&1 &
 JUPYTER_PID=$!
 sleep 1
 if kill -0 "$JUPYTER_PID" 2>/dev/null; then
@@ -140,7 +152,7 @@ else
     echo "SageAttention startup flag: disabled (${SAGE_ATTENTION_BACKEND})"
 fi
 
-python -u /comfyui/main.py \
+"$COMFYUI_PYTHON" -u /comfyui/main.py \
     --disable-auto-launch \
     --disable-metadata \
     --listen 0.0.0.0 \
