@@ -152,7 +152,11 @@ PY
 
 pip_install_runtime() {
     if [ -f "$CUDA_CONSTRAINTS_FILE" ]; then
-        uv pip install --no-cache -c "$CUDA_CONSTRAINTS_FILE" "$@"
+        uv pip install --no-cache \
+            --extra-index-url "$PYTORCH_INDEX_URL" \
+            --index-strategy unsafe-best-match \
+            -c "$CUDA_CONSTRAINTS_FILE" \
+            "$@"
     else
         uv pip install --no-cache "$@"
     fi
