@@ -34,7 +34,6 @@ WAN_WRAPPER_REPO_URL="https://github.com/kijai/ComfyUI-WanVideoWrapper.git"
 KJNODES_REPO_URL="https://github.com/kijai/ComfyUI-KJNodes.git"
 LATEST_WAN_WRAPPER_REF="088128b224242e110d3906c6750e9a3a348a659b"
 LATEST_KJNODES_REF="bc8e4ce4254bcd0050383386ee2f9d753dbf1fa5"
-CUDA_CONSTRAINTS_FILE="/tmp/comfy-cuda-stack-constraints.txt"
 COMFYUI_DIR="/comfyui"
 COMFYUI_VENV="${COMFYUI_DIR}/.venv"
 COMFYUI_PYTHON="${COMFYUI_VENV}/bin/python"
@@ -132,43 +131,13 @@ log_repo_sha() {
     fi
 }
 
-write_cuda_constraints() {
-    python - "$CUDA_CONSTRAINTS_FILE" <<'PY'
-import sys
-from importlib.metadata import distributions
-
-path = sys.argv[1]
-protected = {"torch", "torchvision", "torchaudio", "triton"}
-lines = []
-
-for dist in distributions():
-    name = dist.metadata.get("Name", "")
-    normalized = name.lower().replace("_", "-")
-    if normalized in protected or normalized.startswith("nvidia-"):
-        lines.append(f"{name}=={dist.version}")
-
-with open(path, "w", encoding="utf-8") as handle:
-    handle.write("\n".join(sorted(set(lines))) + "\n")
-PY
-    echo "CUDA/PyTorch constraints written to ${CUDA_CONSTRAINTS_FILE}:"
-    sed 's/^/  /' "$CUDA_CONSTRAINTS_FILE"
-}
-
 pip_install_runtime() {
     if [ ! -x "$COMFYUI_PYTHON" ]; then
         echo "ComfyUI Python environment is missing: ${COMFYUI_PYTHON}" >&2
         exit 1
     fi
 
-    if [ -f "$CUDA_CONSTRAINTS_FILE" ]; then
-        uv pip install --python "$COMFYUI_PYTHON" --no-cache \
-            --extra-index-url "$PYTORCH_INDEX_URL" \
-            --index-strategy unsafe-best-match \
-            -c "$CUDA_CONSTRAINTS_FILE" \
-            "$@"
-    else
-        uv pip install --python "$COMFYUI_PYTHON" --no-cache "$@"
-    fi
+    uv pip install --python "$COMFYUI_PYTHON" --no-cache "$@"
 }
 
 use_comfyui_python_environment() {
@@ -357,7 +326,6 @@ PY
     fi
 
     audit_pytorch_cuda_stack
-    write_cuda_constraints
 }
 
 if [ "$COMFYUI_USE_LATEST" = "true" ]; then
@@ -1013,6 +981,8 @@ if [ "$DOWNLOAD_FLUX" = "true" ]; then
 fi
 
 echo "✅ Custom nodes and dependencies installed!"
+echo "PyTorch CUDA stack audit after custom node dependency installs:"
+audit_pytorch_cuda_stack
 
 # ============================================================================
 # SageAttention wheel and source-build helpers
