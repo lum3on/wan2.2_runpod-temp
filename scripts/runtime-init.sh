@@ -53,7 +53,7 @@ case "$CUDA_PROFILE" in
         if [ "$COMFYUI_USE_LATEST" = "true" ]; then
             TORCH_VERSION="2.12.1+cu130"
             TORCHVISION_VERSION="0.27.1+cu130"
-            TORCHAUDIO_VERSION=""
+            TORCHAUDIO_VERSION="2.11.0+cu130"
         else
             TORCH_VERSION="2.11.0+cu130"
             TORCHVISION_VERSION="0.26.0+cu130"
@@ -237,10 +237,11 @@ pip_install_requirements_runtime() {
 }
 
 audit_pytorch_cuda_stack() {
-    python - "$CUDA_PROFILE" "$EXPECTED_TORCH_FLAVOR" "$EXPECTED_CUDA_VERSION" <<'PY'
+    python - "$CUDA_PROFILE" "$EXPECTED_TORCH_FLAVOR" "$EXPECTED_CUDA_VERSION" "$TORCHAUDIO_VERSION" <<'PY'
 import sys
+from importlib.metadata import PackageNotFoundError, version
 
-profile, expected_flavor, expected_cuda = sys.argv[1:4]
+profile, expected_flavor, expected_cuda, expected_torchaudio = sys.argv[1:5]
 
 try:
     import torch
@@ -272,6 +273,22 @@ except Exception as exc:
     sys.exit(1)
 
 print(f"triton.__version__ = {triton.__version__}")
+
+if expected_torchaudio:
+    try:
+        installed_torchaudio = version("torchaudio")
+    except PackageNotFoundError:
+        print(f"torchaudio missing; expected {expected_torchaudio}")
+        sys.exit(1)
+    if installed_torchaudio != expected_torchaudio:
+        print(f"Expected torchaudio {expected_torchaudio}, found {installed_torchaudio}")
+        sys.exit(1)
+    try:
+        import torchaudio
+    except Exception as exc:
+        print(f"torchaudio import failed: {exc}")
+        sys.exit(1)
+    print(f"torchaudio.__version__ = {torchaudio.__version__}")
 PY
 }
 
@@ -321,7 +338,7 @@ PY
     fi
 
     if [ -z "$TORCHAUDIO_VERSION" ]; then
-        echo "  -> Removing torchaudio in latest CUDA 13 mode; no protected matching wheel is selected"
+        echo "  -> Removing torchaudio because no protected matching wheel is selected"
         "$COMFYUI_PYTHON" -m pip uninstall -y torchaudio >/dev/null 2>&1 || true
     fi
 
