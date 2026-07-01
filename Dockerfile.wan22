@@ -7,12 +7,15 @@
 # Stage 1: Base image with CUDA 12.8.1 and ComfyUI
 # ============================================================================
 # Using devel image (includes nvcc) for SageAttention2++ compilation at runtime.
-# Override CUDA_IMAGE together with CUDA_PROFILE=cu130 only when a CUDA 13 stack is explicitly selected.
+# For latest-mode CUDA 13 builds, pass CUDA_IMAGE=nvidia/cuda:13.0.0-devel-ubuntu24.04
+# together with COMFYUI_USE_LATEST=true and CUDA_PROFILE=cu130. Runtime env vars alone
+# cannot change the baked-in nvcc/toolkit in this base image.
 ARG CUDA_IMAGE=nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
 FROM ${CUDA_IMAGE} AS base
 
 # Build arguments
 ARG COMFYUI_VERSION=v0.3.56
+ARG COMFYUI_USE_LATEST=false
 ARG CUDA_PROFILE=cu128
 
 # Environment variables
@@ -21,6 +24,7 @@ ENV PIP_PREFER_BINARY=1
 ENV PYTHONUNBUFFERED=1
 ENV CMAKE_BUILD_PARALLEL_LEVEL=8
 ENV HF_HUB_ENABLE_HF_TRANSFER=1
+ENV COMFYUI_USE_LATEST=${COMFYUI_USE_LATEST}
 ENV CUDA_PROFILE=${CUDA_PROFILE}
 
 # Install system dependencies
@@ -72,20 +76,27 @@ RUN case "$CUDA_PROFILE" in \
             ;; \
         cu130) \
             PYTORCH_INDEX_URL="https://download.pytorch.org/whl/cu130"; \
-            TORCH_VERSION="2.11.0+cu130"; \
-            TORCHVISION_VERSION="0.26.0+cu130"; \
-            TORCHAUDIO_VERSION="2.11.0+cu130"; \
+            if [ "$COMFYUI_USE_LATEST" = "true" ]; then \
+                TORCH_VERSION="2.12.1+cu130"; \
+                TORCHVISION_VERSION="0.27.1+cu130"; \
+                TORCHAUDIO_VERSION=""; \
+            else \
+                TORCH_VERSION="2.11.0+cu130"; \
+                TORCHVISION_VERSION="0.26.0+cu130"; \
+                TORCHAUDIO_VERSION="2.11.0+cu130"; \
+            fi; \
             ;; \
         *) \
             echo "Unsupported CUDA_PROFILE=$CUDA_PROFILE"; \
             exit 1; \
             ;; \
     esac \
+    && INSTALL_ARGS="torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION}" \
+    && if [ -n "$TORCHAUDIO_VERSION" ]; then INSTALL_ARGS="${INSTALL_ARGS} torchaudio==${TORCHAUDIO_VERSION}"; fi \
     && pip install --no-cache-dir --upgrade --force-reinstall \
-        "torch==${TORCH_VERSION}" \
-        "torchvision==${TORCHVISION_VERSION}" \
-        "torchaudio==${TORCHAUDIO_VERSION}" \
+        ${INSTALL_ARGS} \
         --index-url "$PYTORCH_INDEX_URL" \
+    && if [ -z "$TORCHAUDIO_VERSION" ]; then pip uninstall -y torchaudio || true; fi \
     && rm -rf /root/.cache/pip \
     && rm -rf /tmp/*
 
@@ -330,8 +341,8 @@ CMD ["/start.sh"]
 # Labels
 LABEL maintainer="WAN 2.2 RunPod Compute Template"
 LABEL description="RunPod COMPUTE template for WAN 2.2 with CUDA 12.8, stable CUDA PyTorch, ComfyUI v0.3.56, SageAttention, and JupyterLab. ComfyUI on port 8188, JupyterLab on port 8189."
-LABEL cuda.version="12.8.1"
-LABEL pytorch.version="2.11.0"
+LABEL cuda.version="build-arg-selected"
+LABEL pytorch.version="build-arg-selected"
 LABEL comfyui.version="v0.3.56"
 LABEL wan.version="2.2"
 LABEL template.type="compute"

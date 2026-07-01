@@ -17,9 +17,17 @@ echo "==================================================================="
 # ============================================================================
 : "${COMFYUI_USE_LATEST:=false}"
 : "${COMFYUI_DEFAULT_VERSION:=v0.3.56}"
-: "${COMFYUI_CUDA_PROFILE:=${CUDA_PROFILE:-cu128}}"
 
-CUDA_PROFILE="$COMFYUI_CUDA_PROFILE"
+if [ -n "${COMFYUI_CUDA_PROFILE:-}" ]; then
+    CUDA_PROFILE="$COMFYUI_CUDA_PROFILE"
+elif [ -n "${CUDA_PROFILE:-}" ]; then
+    CUDA_PROFILE="$CUDA_PROFILE"
+elif [ "$COMFYUI_USE_LATEST" = "true" ]; then
+    CUDA_PROFILE="cu130"
+else
+    CUDA_PROFILE="cu128"
+fi
+COMFYUI_CUDA_PROFILE="$CUDA_PROFILE"
 COMFYUI_REPO_URL="https://github.com/Comfy-Org/ComfyUI.git"
 MANAGER_REPO_URL="https://github.com/Comfy-Org/ComfyUI-Manager.git"
 WAN_WRAPPER_REPO_URL="https://github.com/kijai/ComfyUI-WanVideoWrapper.git"
@@ -39,9 +47,15 @@ case "$CUDA_PROFILE" in
         ;;
     cu130)
         PYTORCH_INDEX_URL="https://download.pytorch.org/whl/cu130"
-        TORCH_VERSION="2.11.0+cu130"
-        TORCHVISION_VERSION="0.26.0+cu130"
-        TORCHAUDIO_VERSION="2.11.0+cu130"
+        if [ "$COMFYUI_USE_LATEST" = "true" ]; then
+            TORCH_VERSION="2.12.1+cu130"
+            TORCHVISION_VERSION="0.27.1+cu130"
+            TORCHAUDIO_VERSION=""
+        else
+            TORCH_VERSION="2.11.0+cu130"
+            TORCHVISION_VERSION="0.26.0+cu130"
+            TORCHAUDIO_VERSION="2.11.0+cu130"
+        fi
         EXPECTED_TORCH_FLAVOR="cu130"
         EXPECTED_CUDA_VERSION="13.0"
         ;;
@@ -144,6 +158,89 @@ pip_install_runtime() {
     fi
 }
 
+sanitize_requirements_file() {
+    local requirements_file="$1"
+    local sanitized_file
+
+    if [ "$COMFYUI_USE_LATEST" != "true" ]; then
+        printf '%s\n' "$requirements_file"
+        return 0
+    fi
+
+    sanitized_file="$(mktemp /tmp/comfy-reqs.XXXXXX.txt)"
+    python - "$requirements_file" "$sanitized_file" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1])
+target = Path(sys.argv[2])
+protected = {
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "triton",
+    "sageattention",
+    "sageattn3",
+    "flash-attn",
+}
+
+def requirement_name(line: str) -> str | None:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    if stripped.startswith(("-r", "--requirement", "-c", "--constraint")):
+        return None
+    if stripped.startswith("-e "):
+        match = re.search(r"[#&]egg=([A-Za-z0-9_.-]+)", stripped)
+        return match.group(1) if match else None
+    if stripped.startswith(("git+", "http://", "https://")):
+        match = re.search(r"[#&]egg=([A-Za-z0-9_.-]+)", stripped)
+        return match.group(1) if match else None
+
+    without_marker = stripped.split(";", 1)[0].strip()
+    without_comment = without_marker.split("#", 1)[0].strip()
+    match = re.match(r"([A-Za-z0-9_.-]+)", without_comment)
+    return match.group(1) if match else None
+
+kept: list[str] = []
+removed: list[str] = []
+
+for raw_line in source.read_text(encoding="utf-8", errors="ignore").splitlines():
+    name = requirement_name(raw_line)
+    normalized = name.lower().replace("_", "-") if name else ""
+    if normalized in protected:
+        removed.append(raw_line.strip())
+        continue
+    kept.append(raw_line)
+
+target.write_text("\n".join(kept) + "\n", encoding="utf-8")
+
+if removed:
+    print(f"  -> sanitized {source}: removed protected dependencies:", file=sys.stderr)
+    for line in removed:
+        print(f"     - {line}", file=sys.stderr)
+PY
+    printf '%s\n' "$sanitized_file"
+}
+
+pip_install_requirements_runtime() {
+    local requirements_file="$1"
+    shift
+
+    if [ "$COMFYUI_USE_LATEST" = "true" ]; then
+        local sanitized_file
+        local status=0
+
+        sanitized_file="$(sanitize_requirements_file "$requirements_file")"
+        pip_install_runtime -r "$sanitized_file" "$@" || status=$?
+        rm -f "$sanitized_file"
+        return "$status"
+    fi
+
+    pip_install_runtime -r "$requirements_file" "$@"
+}
+
 audit_pytorch_cuda_stack() {
     python - "$CUDA_PROFILE" "$EXPECTED_TORCH_FLAVOR" "$EXPECTED_CUDA_VERSION" <<'PY'
 import sys
@@ -184,7 +281,14 @@ PY
 }
 
 ensure_cuda_pytorch_stack() {
-    echo "Installing/verifying CUDA profile ${CUDA_PROFILE}: ${TORCH_VERSION}, ${TORCHVISION_VERSION}, ${TORCHAUDIO_VERSION}"
+    local stack_description="${TORCH_VERSION}, ${TORCHVISION_VERSION}"
+    if [ -n "$TORCHAUDIO_VERSION" ]; then
+        stack_description="${stack_description}, ${TORCHAUDIO_VERSION}"
+    else
+        stack_description="${stack_description}, torchaudio intentionally skipped"
+    fi
+
+    echo "Installing/verifying CUDA profile ${CUDA_PROFILE}: ${stack_description}"
 
     if python - "$TORCH_VERSION" "$TORCHVISION_VERSION" "$TORCHAUDIO_VERSION" <<'PY'
 import sys
@@ -193,8 +297,9 @@ from importlib.metadata import version, PackageNotFoundError
 expected = {
     "torch": sys.argv[1],
     "torchvision": sys.argv[2],
-    "torchaudio": sys.argv[3],
 }
+if sys.argv[3]:
+    expected["torchaudio"] = sys.argv[3]
 
 for package, expected_version in expected.items():
     try:
@@ -207,11 +312,22 @@ PY
     then
         echo "  -> Selected PyTorch CUDA stack already installed"
     else
+        install_args=(
+            "torch==${TORCH_VERSION}"
+            "torchvision==${TORCHVISION_VERSION}"
+        )
+        if [ -n "$TORCHAUDIO_VERSION" ]; then
+            install_args+=("torchaudio==${TORCHAUDIO_VERSION}")
+        fi
+
         pip install --no-cache-dir --upgrade --force-reinstall \
-            "torch==${TORCH_VERSION}" \
-            "torchvision==${TORCHVISION_VERSION}" \
-            "torchaudio==${TORCHAUDIO_VERSION}" \
+            "${install_args[@]}" \
             --index-url "$PYTORCH_INDEX_URL"
+    fi
+
+    if [ -z "$TORCHAUDIO_VERSION" ]; then
+        echo "  -> Removing torchaudio in latest CUDA 13 mode; no protected matching wheel is selected"
+        pip uninstall -y torchaudio >/dev/null 2>&1 || true
     fi
 
     audit_pytorch_cuda_stack
@@ -304,7 +420,7 @@ install_node_requirements() {
 
     if [ -f "${repo_dir}/requirements.txt" ]; then
         echo "  -> ${repo_dir}..."
-        pip_install_runtime -r "${repo_dir}/requirements.txt" "$@"
+        pip_install_requirements_runtime "${repo_dir}/requirements.txt" "$@"
     fi
 }
 
@@ -360,7 +476,7 @@ if [ "$COMFYUI_USE_LATEST" = "true" ]; then
     # Install dependencies
     echo "   📦 Installing ComfyUI-Manager dependencies..."
     if [ -f "ComfyUI-Manager/requirements.txt" ]; then
-        pip_install_runtime -r ComfyUI-Manager/requirements.txt
+        pip_install_requirements_runtime ComfyUI-Manager/requirements.txt
     fi
 else
     # Stable ComfyUI v0.3.56 needs pinned ComfyUI-Manager v3.37.1
@@ -398,7 +514,7 @@ else
         # Install dependencies
         echo "📦 Installing ComfyUI-Manager dependencies..."
         if [ -f "ComfyUI-Manager/requirements.txt" ]; then
-            pip_install_runtime -r ComfyUI-Manager/requirements.txt
+            pip_install_requirements_runtime ComfyUI-Manager/requirements.txt
         fi
     fi
 fi
@@ -740,7 +856,7 @@ pip_install_runtime \
 # Note: librosa is in pyproject.toml but not requirements.txt, so we add it explicitly
 if [ -f "ComfyUI-KJNodes/requirements.txt" ]; then
     echo "  → ComfyUI-KJNodes..."
-    pip_install_runtime -r ComfyUI-KJNodes/requirements.txt librosa
+    pip_install_requirements_runtime ComfyUI-KJNodes/requirements.txt librosa
 fi
 
 # ComfyUI-VideoHelperSuite dependencies
@@ -753,7 +869,7 @@ install_node_requirements "ComfyUI_Fill-Nodes"
 # Requires opencv-contrib-python for guidedFilter function
 if [ -f "ComfyUI_LayerStyle/requirements.txt" ]; then
     echo "  → ComfyUI_LayerStyle..."
-    pip_install_runtime -r ComfyUI_LayerStyle/requirements.txt
+    pip_install_requirements_runtime ComfyUI_LayerStyle/requirements.txt
     # Install opencv-contrib-python for guidedFilter (replaces opencv-python)
     pip_install_runtime opencv-contrib-python
 fi
@@ -762,7 +878,7 @@ fi
 # Requires specific timm version for RotaryEmbedding compatibility
 if [ -f "ComfyUI_LayerStyle_Advance/requirements.txt" ]; then
     echo "  → ComfyUI_LayerStyle_Advance..."
-    pip_install_runtime -r ComfyUI_LayerStyle_Advance/requirements.txt
+    pip_install_requirements_runtime ComfyUI_LayerStyle_Advance/requirements.txt
     # Pin timm to compatible version (0.9.x has RotaryEmbedding)
     pip_install_runtime "timm>=0.9.0,<1.0.0"
 fi
@@ -770,7 +886,7 @@ fi
 # ComfyUI_performance-report dependencies (skip if using latest ComfyUI)
 if [ "$COMFYUI_USE_LATEST" != "true" ] && [ -f "ComfyUI_performance-report/requirements.txt" ]; then
     echo "  → ComfyUI_performance-report..."
-    pip_install_runtime -r ComfyUI_performance-report/requirements.txt
+    pip_install_requirements_runtime ComfyUI_performance-report/requirements.txt
 fi
 
 # ComfyUI-MatAnyone dependencies (torch is already installed, just need omegaconf)
@@ -780,7 +896,7 @@ if [ -d "ComfyUI-MatAnyone" ]; then
     pip_install_runtime omegaconf
     if [ -f "ComfyUI-MatAnyone/requirements.txt" ]; then
         # Also install from requirements.txt in case there are other deps
-        pip_install_runtime -r ComfyUI-MatAnyone/requirements.txt
+        pip_install_requirements_runtime ComfyUI-MatAnyone/requirements.txt
     fi
 fi
 
@@ -816,63 +932,245 @@ if [ "$DOWNLOAD_FLUX" = "true" ]; then
     # ComfyUI-GGUF dependencies
     if [ -f "ComfyUI-GGUF/requirements.txt" ]; then
         echo "    → ComfyUI-GGUF..."
-        pip_install_runtime -r ComfyUI-GGUF/requirements.txt
+        pip_install_requirements_runtime ComfyUI-GGUF/requirements.txt
     fi
 
     # rgthree-comfy dependencies
     if [ -f "rgthree-comfy/requirements.txt" ]; then
         echo "    → rgthree-comfy..."
-        pip_install_runtime -r rgthree-comfy/requirements.txt
+        pip_install_requirements_runtime rgthree-comfy/requirements.txt
     fi
 
     # ComfyUI_UltimateSDUpscale dependencies
     if [ -f "ComfyUI_UltimateSDUpscale/requirements.txt" ]; then
         echo "    → ComfyUI_UltimateSDUpscale..."
-        pip_install_runtime -r ComfyUI_UltimateSDUpscale/requirements.txt
+        pip_install_requirements_runtime ComfyUI_UltimateSDUpscale/requirements.txt
     fi
 
     # ComfyUI-Detail-Daemon dependencies
     if [ -f "ComfyUI-Detail-Daemon/requirements.txt" ]; then
         echo "    → ComfyUI-Detail-Daemon..."
-        pip_install_runtime -r ComfyUI-Detail-Daemon/requirements.txt
+        pip_install_requirements_runtime ComfyUI-Detail-Daemon/requirements.txt
     fi
 
     # ComfyUI-DyPE dependencies
     if [ -f "ComfyUI-DyPE/requirements.txt" ]; then
         echo "    → ComfyUI-DyPE..."
-        pip_install_runtime -r ComfyUI-DyPE/requirements.txt
+        pip_install_requirements_runtime ComfyUI-DyPE/requirements.txt
     fi
 
     # ComfyUI-Flux-Continuum dependencies
     if [ -f "ComfyUI-Flux-Continuum/requirements.txt" ]; then
         echo "    → ComfyUI-Flux-Continuum..."
-        pip_install_runtime -r ComfyUI-Flux-Continuum/requirements.txt
+        pip_install_requirements_runtime ComfyUI-Flux-Continuum/requirements.txt
     fi
 fi
 
 echo "✅ Custom nodes and dependencies installed!"
 
 # ============================================================================
+# SageAttention wheel and source-build helpers
+# ============================================================================
+SAGE2_SM120_WHEEL_FILENAME="sageattention-2.2.0+cu130torch2.12.1sm120-cp312-cp312-linux_x86_64.whl"
+SAGE2_SM120_WHEEL_SHA256="8f45c7db35d5cc44a40df6d7821c5be4057ff98843dbf941b90f241e23e81eda"
+SAGE2_SM120_WHEEL_URL="${SAGE2_SM120_WHEEL_URL:-https://huggingface.co/yo9otatara/prebuilt_wheels/resolve/main/sageattention-2.2.0%2Bcu130torch2.12.1sm120-cp312-cp312-linux_x86_64.whl}"
+
+SAGE3_SM120_WHEEL_FILENAME="sageattn3-1.0.0+cu130torch2.12.1sm120-cp312-cp312-linux_x86_64.whl"
+SAGE3_SM120_WHEEL_SHA256="1da00b96bc5519ffa91120170a0e815478a89aa09eeaf7a68c22241ccf3f990d"
+SAGE3_SM120_WHEEL_URL="${SAGE3_SM120_WHEEL_URL:-https://huggingface.co/yo9otatara/prebuilt_wheels/resolve/main/sageattn3-1.0.0%2Bcu130torch2.12.1sm120-cp312-cp312-linux_x86_64.whl}"
+
+download_and_install_verified_wheel() {
+    local package_label="$1"
+    local filename="$2"
+    local url="$3"
+    local expected_sha256="$4"
+    local wheel_path="/tmp/${filename}"
+    local actual_sha256
+
+    rm -f "$wheel_path"
+    echo "Downloading ${package_label} wheel to ${wheel_path}"
+    curl -fL --retry 3 --retry-delay 2 -o "$wheel_path" "$url"
+
+    actual_sha256="$(sha256sum "$wheel_path" | awk '{print $1}')"
+    if [ "$actual_sha256" != "$expected_sha256" ]; then
+        echo "Hash verification failed for ${package_label}"
+        echo "  expected: ${expected_sha256}"
+        echo "  actual:   ${actual_sha256}"
+        rm -f "$wheel_path"
+        return 1
+    fi
+
+    echo "Hash verified for ${package_label}: ${actual_sha256}"
+    pip install --no-cache-dir --no-deps --force-reinstall "$wheel_path"
+}
+
+verify_sage2_import() {
+    python - <<'PY'
+import sys
+
+try:
+    import triton
+    print(f"  [OK] Triton {triton.__version__}")
+except Exception as exc:
+    print(f"  [FAIL] Triton import failed: {exc}")
+    sys.exit(1)
+
+try:
+    from sageattention import sageattn
+    print("  [OK] sageattention.sageattn import")
+except Exception as exc:
+    print(f"  [FAIL] SageAttention import failed: {exc}")
+    sys.exit(1)
+PY
+}
+
+verify_sage3_import() {
+    python - <<'PY'
+import sys
+
+try:
+    from sageattn3 import sageattn3_blackwell
+    print("  [OK] sageattn3.sageattn3_blackwell import")
+except Exception as exc:
+    print(f"  [FAIL] SageAttention3 import failed: {exc}")
+    sys.exit(1)
+PY
+}
+
+smoke_sage2_cuda() {
+    python - <<'PY'
+import sys
+import torch
+from sageattention import sageattn
+
+if not torch.cuda.is_available():
+    print("CUDA is not available for SageAttention smoke test")
+    sys.exit(1)
+
+device = torch.device("cuda:0")
+q = torch.randn((1, 1, 16, 64), device=device, dtype=torch.float16)
+k = torch.randn((1, 1, 16, 64), device=device, dtype=torch.float16)
+v = torch.randn((1, 1, 16, 64), device=device, dtype=torch.float16)
+out = sageattn(q, k, v, tensor_layout="HND", is_causal=False)
+torch.cuda.synchronize()
+print(f"SageAttention CUDA smoke output shape = {tuple(out.shape)}")
+PY
+}
+
+smoke_sage3_cuda() {
+    python - <<'PY'
+import sys
+import torch
+from sageattn3 import sageattn3_blackwell
+
+if not torch.cuda.is_available():
+    print("CUDA is not available for SageAttention3 smoke test")
+    sys.exit(1)
+
+device = torch.device("cuda:0")
+q = torch.randn((1, 2, 128, 128), device=device, dtype=torch.bfloat16)
+k = torch.randn((1, 2, 128, 128), device=device, dtype=torch.bfloat16)
+v = torch.randn((1, 2, 128, 128), device=device, dtype=torch.bfloat16)
+out = sageattn3_blackwell(q, k, v, is_causal=False)
+torch.cuda.synchronize()
+print(f"SageAttention3 CUDA smoke output shape = {tuple(out.shape)}, dtype = {out.dtype}")
+PY
+}
+
+build_sageattention_from_source_current_gpu() {
+    local arch_label="$1"
+    local arch_list
+    local build_result
+
+    arch_list="$(python - <<'PY'
+import sys
+import torch
+
+if not torch.cuda.is_available():
+    print("CUDA is not available; cannot infer TORCH_CUDA_ARCH_LIST for SageAttention source build", file=sys.stderr)
+    sys.exit(1)
+
+major, minor = torch.cuda.get_device_capability(0)
+print(f"{major}.{minor}")
+PY
+)"
+
+    echo ""
+    echo "==================================================================="
+    echo "Building SageAttention from source for ${arch_label} (SM ${arch_list})"
+    echo "==================================================================="
+    echo "Installing build dependencies (wheel, setuptools, ninja)..."
+    pip_install_runtime wheel setuptools ninja
+
+    cd /tmp
+    if [ -d "SageAttention" ]; then
+        rm -rf SageAttention
+    fi
+
+    echo "Cloning SageAttention repository..."
+    git clone https://github.com/thu-ml/SageAttention.git
+    cd SageAttention
+
+    export TORCH_CUDA_ARCH_LIST="$arch_list"
+    export EXT_PARALLEL=4
+    export NVCC_APPEND_FLAGS="--threads 8"
+    export MAX_JOBS=32
+
+    build_result=0
+    pip install . --no-cache-dir --no-build-isolation || build_result=$?
+
+    cd /
+    rm -rf /tmp/SageAttention
+
+    if [ $build_result -ne 0 ]; then
+        echo "SageAttention source build failed"
+        return "$build_result"
+    fi
+
+    echo "SageAttention source build succeeded for SM ${arch_list}"
+}
+
+# ============================================================================
 # GPU_TYPE Configuration - Set in RunPod Environment Variables
 # ============================================================================
 # GPU_TYPE=H200    - Build SageAttention from source with SM90 kernels (Hopper)
 # GPU_TYPE=H100    - Build SageAttention from source with SM90 kernels (Hopper)
-# GPU_TYPE=5090    - Use prebuilt wheel (Ada Lovelace/Blackwell consumer)
+# GPU_TYPE=5090    - Blackwell SM120 family
 # GPU_TYPE=6000    - Use prebuilt wheel (RTX Pro 6000 Ada)
 # GPU_TYPE=auto    - Auto-detect from nvidia-smi (default)
+# SAGE_ATTENTION_BACKEND=auto|both|sage2|sage3|source|off
 # ============================================================================
 : "${GPU_TYPE:=auto}"
+: "${SAGE_ATTENTION_BACKEND:=auto}"
+
+SAGE_ATTENTION_BACKEND="$(printf '%s' "$SAGE_ATTENTION_BACKEND" | tr '[:upper:]' '[:lower:]')"
+case "$SAGE_ATTENTION_BACKEND" in
+    auto|both|sage2|sage3|source|off)
+        ;;
+    *)
+        echo "Unsupported SAGE_ATTENTION_BACKEND=${SAGE_ATTENTION_BACKEND}"
+        echo "Supported values: auto, both, sage2, sage3, source, off"
+        exit 1
+        ;;
+esac
+
+SAGE_RUNTIME_HANDLED=false
 
 # Quick check: skip SageAttention install if already importable
 SAGE_ALREADY_INSTALLED=false
-if python -c "from sageattention import sageattn" 2>/dev/null; then
+if [ "$SAGE_ATTENTION_BACKEND" = "off" ]; then
+    echo "==================================================================="
+    echo "SageAttention disabled by SAGE_ATTENTION_BACKEND=off"
+    echo "==================================================================="
+    SAGE_RUNTIME_HANDLED=true
+elif [ "$SAGE_ATTENTION_BACKEND" = "sage2" ] && python -c "from sageattention import sageattn" 2>/dev/null; then
     echo "==================================================================="
     echo "✅ SageAttention already installed - skipping installation"
     echo "==================================================================="
     SAGE_ALREADY_INSTALLED=true
 fi
 
-if [ "$SAGE_ALREADY_INSTALLED" = false ]; then
+if [ "$SAGE_ALREADY_INSTALLED" = false ] && [ "$SAGE_RUNTIME_HANDLED" = false ]; then
 
 echo "==================================================================="
 echo "⚡ SageAttention2++ Installation Starting"
@@ -916,12 +1214,12 @@ if [ "$GPU_TYPE" = "auto" ]; then
 
         # 2. RTX PRO 6000/5000 Blackwell - needs source build for SM120
         elif echo "$DETECTED_GPU_UPPER" | grep -qE "(RTX PRO 6000|RTX PRO 5000).*BLACKWELL|BLACKWELL.*(RTX PRO 6000|RTX PRO 5000)"; then
-            GPU_TYPE="PRO_BLACKWELL"
+            GPU_TYPE="BLACKWELL_SM120"
             echo "   → RTX PRO Blackwell workstation GPU - will build from source (SM120)"
 
         # 3. GeForce RTX 50-series (Blackwell consumer) - needs source build for SM120
         elif echo "$DETECTED_GPU_UPPER" | grep -qE "RTX 5090|RTX 5080|RTX 5070|RTX 5060"; then
-            GPU_TYPE="RTX50"
+            GPU_TYPE="BLACKWELL_SM120"
             echo "   → GeForce RTX 50-series (Blackwell) - will build from source (SM120)"
 
         # 4. Blackwell datacenter (B200, B100, GB200) - needs source build for SM100
@@ -965,10 +1263,82 @@ else
     echo "📋 GPU_TYPE set explicitly via environment variable: $GPU_TYPE"
 fi
 
+case "$GPU_TYPE" in
+    PRO_BLACKWELL|RTX50|5090|pro_blackwell|rtx50)
+        GPU_TYPE="BLACKWELL_SM120"
+        ;;
+esac
+
 echo "   Final GPU_TYPE=$GPU_TYPE"
 SAGE_VERIFY_CUDA_CALL=false
+SAGE_VERIFY_SM90=false
+SAGE_EFFECTIVE_BACKEND="$SAGE_ATTENTION_BACKEND"
+
+if [ "$SAGE_EFFECTIVE_BACKEND" = "auto" ]; then
+    if [ "$COMFYUI_USE_LATEST" = "true" ] && [ "$GPU_TYPE" = "BLACKWELL_SM120" ]; then
+        SAGE_EFFECTIVE_BACKEND="both"
+    else
+        SAGE_EFFECTIVE_BACKEND="sage2"
+    fi
+fi
+
+echo "   SAGE_ATTENTION_BACKEND=${SAGE_ATTENTION_BACKEND} (effective: ${SAGE_EFFECTIVE_BACKEND})"
+
+if [ "$SAGE_EFFECTIVE_BACKEND" = "sage2" ] && python -c "from sageattention import sageattn" 2>/dev/null; then
+    echo "==================================================================="
+    echo "SageAttention already installed - skipping installation"
+    echo "==================================================================="
+    SAGE_RUNTIME_HANDLED=true
+fi
+
+if [ "$SAGE_EFFECTIVE_BACKEND" = "source" ]; then
+    build_sageattention_from_source_current_gpu "$GPU_TYPE"
+    verify_sage2_import
+    case "$GPU_TYPE" in
+        BLACKWELL_SM120)
+            smoke_sage2_cuda
+            ;;
+    esac
+    SAGE_RUNTIME_HANDLED=true
+fi
+
+if [ "$SAGE_RUNTIME_HANDLED" = false ]; then
+    case "$SAGE_EFFECTIVE_BACKEND" in
+        both|sage2|sage3)
+            if [ "$COMFYUI_USE_LATEST" = "true" ] && [ "$CUDA_PROFILE" = "cu130" ] && [ "$GPU_TYPE" = "BLACKWELL_SM120" ]; then
+                if [ "$SAGE_EFFECTIVE_BACKEND" = "both" ] || [ "$SAGE_EFFECTIVE_BACKEND" = "sage2" ]; then
+                    if ! (
+                        download_and_install_verified_wheel "SageAttention" "$SAGE2_SM120_WHEEL_FILENAME" "$SAGE2_SM120_WHEEL_URL" "$SAGE2_SM120_WHEEL_SHA256" &&
+                        verify_sage2_import &&
+                        smoke_sage2_cuda
+                    ); then
+                        if [ "$SAGE_ATTENTION_BACKEND" = "sage2" ]; then
+                            echo "SageAttention SM120 wheel failed; falling back to source build for SAGE_ATTENTION_BACKEND=sage2"
+                        else
+                            echo "SageAttention SM120 wheel failed"
+                            exit 1
+                        fi
+                    else
+                        SAGE_RUNTIME_HANDLED=true
+                    fi
+                fi
+
+                if [ "$SAGE_EFFECTIVE_BACKEND" = "both" ] || [ "$SAGE_EFFECTIVE_BACKEND" = "sage3" ]; then
+                    download_and_install_verified_wheel "SageAttention3" "$SAGE3_SM120_WHEEL_FILENAME" "$SAGE3_SM120_WHEEL_URL" "$SAGE3_SM120_WHEEL_SHA256"
+                    verify_sage3_import
+                    smoke_sage3_cuda
+                    SAGE_RUNTIME_HANDLED=true
+                fi
+            elif [ "$SAGE_EFFECTIVE_BACKEND" = "both" ] || [ "$SAGE_EFFECTIVE_BACKEND" = "sage3" ]; then
+                echo "SAGE_ATTENTION_BACKEND=${SAGE_EFFECTIVE_BACKEND} requires COMFYUI_USE_LATEST=true, CUDA profile cu130, and an SM120 Blackwell GPU."
+                exit 1
+            fi
+            ;;
+    esac
+fi
 
 # Determine installation method based on GPU type
+if [ "$SAGE_RUNTIME_HANDLED" = false ]; then
 case "$GPU_TYPE" in
     H200|H100|h200|h100)
         # Build from source for Hopper GPUs (SM90)
@@ -1088,7 +1458,7 @@ case "$GPU_TYPE" in
         fi
         ;;
 
-    PRO_BLACKWELL|RTX50|pro_blackwell|rtx50)
+    BLACKWELL_SM120|PRO_BLACKWELL|RTX50|pro_blackwell|rtx50)
         # Build from source for Blackwell consumer/workstation GPUs (SM120)
         echo ""
         echo "==================================================================="
@@ -1197,7 +1567,7 @@ case "$GPU_TYPE" in
 esac
 
 case "$GPU_TYPE" in
-    PRO_BLACKWELL|RTX50|pro_blackwell|rtx50)
+    BLACKWELL_SM120|PRO_BLACKWELL|RTX50|pro_blackwell|rtx50)
         SAGE_VERIFY_CUDA_CALL=true
         ;;
 esac
@@ -1290,6 +1660,8 @@ torch.cuda.synchronize()
 print(f"SageAttention CUDA smoke output shape = {tuple(out.shape)}")
 PY
 fi
+
+fi  # End of legacy SageAttention install/verification path
 
 fi  # End of SAGE_ALREADY_INSTALLED=false block
 

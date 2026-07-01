@@ -13,6 +13,26 @@ on:
         description: 'Custom tag for the Docker image'
         required: false
         default: 'latest'
+      cuda_image:
+        description: 'CUDA base image'
+        required: false
+        default: 'nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04'
+      comfyui_use_latest:
+        description: 'Set COMFYUI_USE_LATEST build env'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      cuda_profile:
+        description: 'CUDA PyTorch wheel profile'
+        required: false
+        default: 'cu128'
+        type: choice
+        options:
+          - cu128
+          - cu130
 
 env:
   REGISTRY: ghcr.io
@@ -57,8 +77,10 @@ jobs:
             type=semver,pattern={{major}}
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '' }}
             
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -75,6 +97,9 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             COMFYUI_VERSION=v0.3.56
+            CUDA_IMAGE=${{ github.event.inputs.cuda_image || 'nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04' }}
+            COMFYUI_USE_LATEST=${{ github.event.inputs.comfyui_use_latest || 'false' }}
+            CUDA_PROFILE=${{ github.event.inputs.cuda_profile || 'cu128' }}
             
       - name: Image digest
         run: echo "Image pushed with digest ${{ steps.build.outputs.digest }}"

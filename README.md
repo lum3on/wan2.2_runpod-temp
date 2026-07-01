@@ -83,6 +83,13 @@ cd wan2.2_runpod-temp
 # Build the Docker image
 docker build -f Dockerfile.wan22 -t wan22-runpod:latest .
 
+# Build a latest-mode CUDA 13 image
+docker build -f Dockerfile.wan22 \
+  --build-arg CUDA_IMAGE=nvidia/cuda:13.0.0-devel-ubuntu24.04 \
+  --build-arg COMFYUI_USE_LATEST=true \
+  --build-arg CUDA_PROFILE=cu130 \
+  -t wan22-runpod:cuda13-latest .
+
 # Run with docker-compose
 docker-compose -f docker-compose.wan22.yml up -d
 ```
@@ -229,14 +236,18 @@ All models are sourced from:
 | `COMFY_LOG_LEVEL` | `DEBUG` | ComfyUI logging level (DEBUG, INFO, WARNING, ERROR) |
 | `GPU_TYPE` | `auto` | GPU type for SageAttention build method (see below) |
 | `COMFYUI_USE_LATEST` | `false` | Use latest stable ComfyUI and ComfyUI-Manager release tags instead of pinned v0.3.56/v3.37.1 |
-| `CUDA_PROFILE` / `COMFYUI_CUDA_PROFILE` | `cu128` | CUDA PyTorch wheel profile. `cu128` is default; `cu130` must be selected explicitly with a matching CUDA 13 base image. |
+| `CUDA_PROFILE` / `COMFYUI_CUDA_PROFILE` | `cu128` stable, `cu130` latest | CUDA PyTorch wheel profile. Stable mode defaults to `cu128`; `COMFYUI_USE_LATEST=true` defaults to `cu130` with torch `2.12.1+cu130` and torchvision `0.27.1+cu130`. |
+| `SAGE_ATTENTION_BACKEND` | `auto` | SageAttention backend selector: `auto`, `both`, `sage2`, `sage3`, `source`, or `off`. |
 | `LUMEON_GITHUB_TOKEN` | unset | GitHub personal access token used to clone private `LumeonLAB/comfyui_lum3on-upscale` at runtime |
+
+**CUDA 13 boundary:** `COMFYUI_USE_LATEST=true` should run on an image built from a CUDA 13 devel base such as `nvidia/cuda:13.0.0-devel-ubuntu24.04`. Runtime env vars can select the `cu130` Python wheels, but they cannot replace the image's baked-in `nvcc`/toolkit.
 
 ### GPU_TYPE Values
 
 | Value | Description | SageAttention Install Method |
 |-------|-------------|------------------------------|
 | `auto` | Auto-detect GPU from nvidia-smi (default) | Automatic |
+| `BLACKWELL_SM120` | RTX PRO Blackwell or RTX 50-series normalized family | Latest CUDA 13 mode installs both verified SM120 wheels; otherwise source build |
 | `PRO_BLACKWELL` | NVIDIA RTX PRO 6000/5000 Blackwell | Build from source with SM120 kernels |
 | `RTX50` | NVIDIA RTX 5090/5080/5070 (Blackwell) | Build from source with SM120 kernels |
 | `B200` | NVIDIA B200/GB200 (Blackwell datacenter) | Build from source with SM100 kernels |
@@ -245,7 +256,18 @@ All models are sourced from:
 | `6000` | NVIDIA RTX 6000 Ada | Prebuilt wheel |
 | `4090` | NVIDIA RTX 4090 (Ada Lovelace) | Prebuilt wheel |
 
-**Note:** Blackwell GPUs (RTX 50-series, RTX PRO Blackwell, B200) require building SageAttention from source because prebuilt wheels don't include SM120/SM100 kernels. H200/H100 GPUs also require source builds for SM90 kernels. Ada/Ampere GPUs can use the faster prebuilt wheel installation.
+### SAGE_ATTENTION_BACKEND Values
+
+| Value | Behavior |
+|-------|----------|
+| `auto` | Latest CUDA 13 + SM120 installs both verified `sageattention` and `sageattn3` wheels; all other GPUs keep the existing automatic SageAttention path. |
+| `both` | Install both SM120 CUDA 13 wheels and start ComfyUI with `--use-sage-attention`. |
+| `sage2` | Install only the root `sageattention` backend and start ComfyUI with `--use-sage-attention`; SM120 wheel failure falls back to source build. |
+| `sage3` | Install only `sageattn3`; ComfyUI starts without `--use-sage-attention`. |
+| `source` | Build root SageAttention from source for the detected GPU and start ComfyUI with `--use-sage-attention`. |
+| `off` | Skip SageAttention install and omit the ComfyUI startup flag. |
+
+**Note:** Latest-mode SM120 Blackwell uses pinned, hash-verified CUDA 13 wheels. B200/GB200, Hopper, and non-latest SM120 paths still use source builds where needed. Ada/Ampere GPUs can use the faster prebuilt wheel installation.
 
 ## 🔄 CI/CD Automation
 

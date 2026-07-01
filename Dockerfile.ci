@@ -7,16 +7,24 @@
 # Stage 1: Base image with CUDA 12.8.1 (NO PyTorch - installed at runtime)
 # ============================================================================
 # Using devel image (includes nvcc) for SageAttention2++ compilation at runtime
-FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04 AS base
+# For latest-mode CUDA 13 builds, pass CUDA_IMAGE=nvidia/cuda:13.0.0-devel-ubuntu24.04
+# together with COMFYUI_USE_LATEST=true and CUDA_PROFILE=cu130. Runtime env vars alone
+# cannot change the baked-in nvcc/toolkit in this base image.
+ARG CUDA_IMAGE=nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
+FROM ${CUDA_IMAGE} AS base
 
 # Build arguments
 ARG COMFYUI_VERSION=v0.3.56
+ARG COMFYUI_USE_LATEST=false
+ARG CUDA_PROFILE=cu128
 
 # Environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PIP_PREFER_BINARY=1
 ENV PYTHONUNBUFFERED=1
 ENV PIP_NO_INPUT=1
+ENV COMFYUI_USE_LATEST=${COMFYUI_USE_LATEST}
+ENV CUDA_PROFILE=${CUDA_PROFILE}
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -170,7 +178,7 @@ CMD ["/start.sh"]
 # Labels
 LABEL maintainer="WAN 2.2 RunPod CI-Optimized Template"
 LABEL description="RunPod template for WAN 2.2 with runtime PyTorch installation. ComfyUI on port 8188, JupyterLab on port 8189."
-LABEL cuda.version="12.8.1"
+LABEL cuda.version="build-arg-selected"
 LABEL pytorch.version="runtime-install"
 LABEL comfyui.version="v0.3.55"
 LABEL wan.version="2.2"

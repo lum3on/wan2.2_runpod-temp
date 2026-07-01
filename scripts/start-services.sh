@@ -4,6 +4,21 @@ set -euo pipefail
 COMFY_PORT="${COMFY_PORT:-8188}"
 JUPYTER_PORT="8189"
 COMFY_LOG_LEVEL="${COMFY_LOG_LEVEL:-DEBUG}"
+SAGE_ATTENTION_BACKEND="${SAGE_ATTENTION_BACKEND:-auto}"
+SAGE_ATTENTION_BACKEND="$(printf '%s' "$SAGE_ATTENTION_BACKEND" | tr '[:upper:]' '[:lower:]')"
+COMFY_SAGE_ARGS=()
+
+case "$SAGE_ATTENTION_BACKEND" in
+    auto|both|sage2|source)
+        COMFY_SAGE_ARGS=(--use-sage-attention)
+        ;;
+    sage3|off)
+        ;;
+    *)
+        echo "Unsupported SAGE_ATTENTION_BACKEND=${SAGE_ATTENTION_BACKEND}" >&2
+        exit 1
+        ;;
+esac
 
 log_section() {
     echo ""
@@ -119,6 +134,12 @@ log_section "Model Download Check"
 /scripts/download_models.sh
 
 log_section "Starting ComfyUI on port ${COMFY_PORT}"
+if [ "${#COMFY_SAGE_ARGS[@]}" -gt 0 ]; then
+    echo "SageAttention startup flag: enabled (${SAGE_ATTENTION_BACKEND})"
+else
+    echo "SageAttention startup flag: disabled (${SAGE_ATTENTION_BACKEND})"
+fi
+
 python -u /comfyui/main.py \
     --disable-auto-launch \
     --disable-metadata \
@@ -126,7 +147,7 @@ python -u /comfyui/main.py \
     --port "$COMFY_PORT" \
     --verbose "$COMFY_LOG_LEVEL" \
     --log-stdout \
-    --use-sage-attention &
+    "${COMFY_SAGE_ARGS[@]}" &
 COMFY_PID=$!
 
 if pod_id="$(detect_runpod_pod_id)"; then
