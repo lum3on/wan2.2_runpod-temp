@@ -344,6 +344,26 @@ else
     MANAGER_VERSION="${MANAGER_VERSION:-3.37.1}"
 fi
 
+install_selected_comfyui() {
+    local selected_version="$1"
+    local mode_label="$2"
+    local install_args=(
+        --workspace /comfyui
+        install
+        --version "$selected_version"
+        --nvidia
+        --skip-torch-or-directml
+    )
+
+    if [ -d "/comfyui/.git" ]; then
+        echo "Existing ComfyUI checkout found; using comfy install --restore for ${selected_version}."
+        install_args+=(--restore)
+    fi
+
+    echo "Installing ComfyUI ${selected_version} (${mode_label})..."
+    COMFY_SKIP_FETCH_REGISTRY=1 /usr/bin/yes | comfy "${install_args[@]}"
+}
+
 # Check if already initialized (for persistent storage)
 ALREADY_INITIALIZED=false
 if [ -f "/comfyui/.initialized" ]; then
@@ -376,11 +396,9 @@ if [ "$COMFYUI_NEEDS_INSTALL" = true ]; then
     # The registry fetch will happen when ComfyUI actually starts
 
     if [ "$COMFYUI_USE_LATEST" = "true" ]; then
-        echo "📦 Installing ComfyUI ${COMFYUI_VERSION} (latest stable release)..."
-        COMFY_SKIP_FETCH_REGISTRY=1 /usr/bin/yes | comfy --workspace /comfyui install --version "$COMFYUI_VERSION" --nvidia
+        install_selected_comfyui "$COMFYUI_VERSION" "latest stable release"
     else
-        echo "📦 Installing ComfyUI ${COMFYUI_VERSION:-v0.3.56} (stable)..."
-        COMFY_SKIP_FETCH_REGISTRY=1 /usr/bin/yes | comfy --workspace /comfyui install --version "${COMFYUI_VERSION:-v0.3.56}" --nvidia
+        install_selected_comfyui "${COMFYUI_VERSION:-v0.3.56}" "stable"
     fi
 
     INSTALLED_COMFYUI_VERSION="$(read_installed_comfyui_version || true)"
