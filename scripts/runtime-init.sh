@@ -589,7 +589,7 @@ if ! verify_manager_runtime_layout; then
     verify_manager_runtime_layout
 fi
 
-# ALWAYS configure ComfyUI-Manager with security_level=weak (runs every startup)
+# ALWAYS configure ComfyUI-Manager with RunPod-compatible install policy (runs every startup)
 # This is required for both v3.37.1 and latest versions
 echo "⚙️  Configuring ComfyUI-Manager (security_level=weak)..."
 
@@ -599,6 +599,10 @@ MANAGER_NODE_CONFIG="/comfyui/custom_nodes/ComfyUI-Manager/config.ini"
 cat > "$MANAGER_NODE_CONFIG" << 'MANAGEREOF'
 [default]
 security_level = weak
+network_mode = personal_cloud
+use_uv = True
+allow_git_url_install = true
+allow_pip_install = true
 MANAGEREOF
 echo "   ✅ ComfyUI-Manager config created at $MANAGER_NODE_CONFIG"
 
@@ -607,6 +611,10 @@ mkdir -p "/comfyui/user/default/ComfyUI-Manager"
 cat > "/comfyui/user/default/ComfyUI-Manager/config.ini" << 'MANAGEREOF'
 [default]
 security_level = weak
+network_mode = personal_cloud
+use_uv = True
+allow_git_url_install = true
+allow_pip_install = true
 MANAGEREOF
 echo "   ✅ ComfyUI-Manager config also created at /comfyui/user/default/ComfyUI-Manager/config.ini"
 
@@ -616,10 +624,10 @@ write_manager_config() {
     cat > "$config_path" << 'MANAGEREOF'
 [default]
 security_level = weak
-network_mode = public
+network_mode = personal_cloud
 use_uv = True
-allow_git_url_install = false
-allow_pip_install = false
+allow_git_url_install = true
+allow_pip_install = true
 MANAGEREOF
     echo "   [OK] ComfyUI-Manager policy config created at $config_path"
 }
