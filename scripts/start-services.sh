@@ -159,6 +159,7 @@ fi
     --port "$COMFY_PORT" \
     --verbose "$COMFY_LOG_LEVEL" \
     --log-stdout \
+    --enable-manager \
     "${COMFY_SAGE_ARGS[@]}" &
 COMFY_PID=$!
 

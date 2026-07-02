@@ -189,7 +189,7 @@ Write-Check "RunPod /features Manager support" ($featuresText -match "manager" -
 $managerChecks = @(
     "/v2/manager/version",
     "/v2/customnode/installed",
-    "/v2/customnode/getmappings",
+    "/v2/customnode/getmappings?mode=local",
     "/v2/manager/queue/status"
 )
 
