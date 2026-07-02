@@ -236,6 +236,7 @@ All models are sourced from:
 | `COMFY_LOG_LEVEL` | `DEBUG` | ComfyUI logging level (DEBUG, INFO, WARNING, ERROR) |
 | `GPU_TYPE` | `auto` | GPU type for SageAttention build method (see below) |
 | `COMFYUI_USE_LATEST` | `false` | Use latest stable ComfyUI and ComfyUI-Manager release tags instead of pinned v0.3.56/v3.37.1 |
+| `COMFYUI_MANAGER_LEGACY_UI` | `true` | Start ComfyUI with the legacy ComfyUI-Manager UI when the installed ComfyUI version supports it. Set to `false` to use the modern Manager extension UI. |
 | `CUDA_PROFILE` / `COMFYUI_CUDA_PROFILE` | `cu128` stable, `cu130` latest | CUDA PyTorch wheel profile. Stable mode defaults to `cu128`; `COMFYUI_USE_LATEST=true` defaults to `cu130` with torch `2.12.1+cu130` and torchvision `0.27.1+cu130`. |
 | `SAGE_ATTENTION_BACKEND` | `auto` | SageAttention backend selector: `auto`, `both`, `sage2`, `sage3`, `source`, or `off`. |
 | `LUMEON_GITHUB_TOKEN` | unset | GitHub personal access token used to clone private `LumeonLAB/comfyui_lum3on-upscale` at runtime |

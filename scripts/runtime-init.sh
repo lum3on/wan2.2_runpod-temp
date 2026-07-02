@@ -455,6 +455,41 @@ install_node_requirements() {
     fi
 }
 
+install_manager_runtime_package() {
+    if [ -f "ComfyUI-Manager/requirements.txt" ]; then
+        pip_install_requirements_runtime ComfyUI-Manager/requirements.txt
+    fi
+
+    if [ -f "ComfyUI-Manager/pyproject.toml" ]; then
+        echo "   Installing ComfyUI-Manager package from runtime checkout..."
+        pip_install_runtime --no-deps -e ComfyUI-Manager
+    fi
+}
+
+verify_manager_runtime_layout() {
+    local missing=0
+    local rel_path
+
+    if [ "$COMFYUI_USE_LATEST" = "true" ]; then
+        for rel_path in \
+            "comfyui_manager/__init__.py" \
+            "comfyui_manager/legacy/manager_server.py" \
+            "comfyui_manager/js/comfyui-manager.js"; do
+            if [ ! -e "ComfyUI-Manager/${rel_path}" ]; then
+                echo "   Missing ComfyUI-Manager runtime file: ${rel_path}" >&2
+                missing=1
+            fi
+        done
+    else
+        if [ ! -e "ComfyUI-Manager/glob/manager_server.py" ]; then
+            echo "   Missing legacy ComfyUI-Manager runtime file: glob/manager_server.py" >&2
+            missing=1
+        fi
+    fi
+
+    [ "$missing" -eq 0 ]
+}
+
 # ============================================================================
 # ComfyUI-Manager Installation - ALWAYS runs to ensure correct version
 # ============================================================================
@@ -504,11 +539,9 @@ if [ "$COMFYUI_USE_LATEST" = "true" ]; then
         git clone --branch "$MANAGER_VERSION" --depth 1 "$MANAGER_REPO_URL"
     fi
 
-    # Install dependencies
+    # Install dependencies and bind the runtime package to this checkout.
     echo "   📦 Installing ComfyUI-Manager dependencies..."
-    if [ -f "ComfyUI-Manager/requirements.txt" ]; then
-        pip_install_requirements_runtime ComfyUI-Manager/requirements.txt
-    fi
+    install_manager_runtime_package
 else
     # Stable ComfyUI v0.3.56 needs pinned ComfyUI-Manager v3.37.1
     MANAGER_VERSION="3.37.1"
@@ -542,12 +575,18 @@ else
         # Use the new official Comfy-Org repository (ltdrdata repo redirects here)
         git clone --branch ${MANAGER_VERSION} --depth 1 "$MANAGER_REPO_URL"
 
-        # Install dependencies
+        # Install dependencies and bind the runtime package to this checkout.
         echo "📦 Installing ComfyUI-Manager dependencies..."
-        if [ -f "ComfyUI-Manager/requirements.txt" ]; then
-            pip_install_requirements_runtime ComfyUI-Manager/requirements.txt
-        fi
+        install_manager_runtime_package
     fi
+fi
+
+if ! verify_manager_runtime_layout; then
+    echo "   ⚠️  ComfyUI-Manager runtime layout is incomplete - reinstalling ${MANAGER_VERSION}..."
+    rm -rf ComfyUI-Manager
+    git clone --branch "$MANAGER_VERSION" --depth 1 "$MANAGER_REPO_URL" ComfyUI-Manager
+    install_manager_runtime_package
+    verify_manager_runtime_layout
 fi
 
 # ALWAYS configure ComfyUI-Manager with security_level=weak (runs every startup)

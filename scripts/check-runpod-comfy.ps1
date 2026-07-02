@@ -4,7 +4,8 @@ param(
     [string]$ExpectedPorts = "8188/http,8189/http",
     [string]$ExpectedVolumeId = "ubhvpibs60",
     [int]$TimeoutSec = 20,
-    [switch]$SkipLocal
+    [switch]$SkipLocal,
+    [switch]$RequireLegacyManagerUi
 )
 
 $ErrorActionPreference = "Stop"
@@ -185,6 +186,12 @@ Write-Check "RunPod /ws websocket" $wsOk "101 upgrade accepted"
 $features = Invoke-JsonGet "$baseUrl/features"
 $featuresText = $features | ConvertTo-Json -Depth 20
 Write-Check "RunPod /features Manager support" ($featuresText -match "manager" -and $featuresText -match "supports_v4") "Manager feature flags present"
+
+if ($RequireLegacyManagerUi) {
+    $extensions = Invoke-JsonGet "$baseUrl/extensions"
+    $extensionsText = $extensions | ConvertTo-Json -Depth 20
+    Write-Check "RunPod /extensions legacy Manager UI" ($extensionsText -match "comfyui-manager-legacy") "legacy Manager frontend extension present"
+}
 
 $managerChecks = @(
     "/v2/manager/version",

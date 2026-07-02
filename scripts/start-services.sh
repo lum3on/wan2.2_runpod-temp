@@ -6,8 +6,11 @@ JUPYTER_PORT="8189"
 COMFY_LOG_LEVEL="${COMFY_LOG_LEVEL:-DEBUG}"
 SAGE_ATTENTION_BACKEND="${SAGE_ATTENTION_BACKEND:-auto}"
 SAGE_ATTENTION_BACKEND="$(printf '%s' "$SAGE_ATTENTION_BACKEND" | tr '[:upper:]' '[:lower:]')"
+COMFYUI_MANAGER_LEGACY_UI="${COMFYUI_MANAGER_LEGACY_UI:-true}"
+COMFYUI_MANAGER_LEGACY_UI="$(printf '%s' "$COMFYUI_MANAGER_LEGACY_UI" | tr '[:upper:]' '[:lower:]')"
 COMFYUI_PYTHON="${COMFYUI_PYTHON:-/comfyui/.venv/bin/python}"
 COMFYUI_JUPYTER="${COMFYUI_JUPYTER:-/comfyui/.venv/bin/jupyter}"
+COMFY_MANAGER_ARGS=()
 COMFY_SAGE_ARGS=()
 
 case "$SAGE_ATTENTION_BACKEND" in
@@ -124,6 +127,24 @@ if [ ! -x "$COMFYUI_JUPYTER" ]; then
     exit 1
 fi
 
+case "$COMFYUI_MANAGER_LEGACY_UI" in
+    true|1|yes|on)
+        if grep -q -- "--enable-manager-legacy-ui" /comfyui/comfy/cli_args.py; then
+            COMFY_MANAGER_ARGS=(--enable-manager --enable-manager-legacy-ui)
+        else
+            echo "ComfyUI does not support --enable-manager-legacy-ui; falling back to --enable-manager." >&2
+            COMFY_MANAGER_ARGS=(--enable-manager)
+        fi
+        ;;
+    false|0|no|off)
+        COMFY_MANAGER_ARGS=(--enable-manager)
+        ;;
+    *)
+        echo "Unsupported COMFYUI_MANAGER_LEGACY_UI=${COMFYUI_MANAGER_LEGACY_UI}" >&2
+        exit 1
+        ;;
+esac
+
 TCMALLOC="$(ldconfig -p | grep -Po "libtcmalloc.so.\d" | head -n 1 || true)"
 if [ -n "$TCMALLOC" ]; then
     export LD_PRELOAD="$TCMALLOC"
@@ -151,6 +172,7 @@ if [ "${#COMFY_SAGE_ARGS[@]}" -gt 0 ]; then
 else
     echo "SageAttention startup flag: disabled (${SAGE_ATTENTION_BACKEND})"
 fi
+echo "ComfyUI Manager startup flags: ${COMFY_MANAGER_ARGS[*]}"
 
 "$COMFYUI_PYTHON" -u /comfyui/main.py \
     --disable-auto-launch \
@@ -159,7 +181,7 @@ fi
     --port "$COMFY_PORT" \
     --verbose "$COMFY_LOG_LEVEL" \
     --log-stdout \
-    --enable-manager \
+    "${COMFY_MANAGER_ARGS[@]}" \
     "${COMFY_SAGE_ARGS[@]}" &
 COMFY_PID=$!
 
